@@ -7,7 +7,7 @@ import tables
 import matplotlib.pyplot as pylab
 
 from DDFacet.Other import MyLogger
-log=MyLogger.getLogger("DynSpecMS")
+log=MyLogger.getLogger("ClassOverdensityMap")
 from DDFacet.Array import shared_dict
 from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 from DDFacet.Other import Multiprocessing
@@ -30,10 +30,10 @@ def AngDist(ra0,dec0,ra1,dec1):
 
 
 class ClassOverdensityMap():
-    def __init__(self,ra,dec,boxDeg,NPix=31,ScaleKpc=50,z=[0.01,2.,20],NCPU=0):
-        self.rac=ra
-        self.decc=dec
-        self.boxDeg=boxDeg
+    def __init__(self,ra,dec,boxDeg,NPix=31,ScaleKpc=200,z=[0.01,2.,20],NCPU=0):
+        self.rac=ra*np.pi/180
+        self.decc=dec*np.pi/180
+        self.boxDeg=boxDeg*np.pi/180
         self.NPix=NPix
         self.ScaleKpc=ScaleKpc
         self.zg=np.linspace(*z)
@@ -51,7 +51,14 @@ class ClassOverdensityMap():
                               affinity=0)
         APP.startWorkers()
 
+    def killWorkers(self):
+        print>>log, "Killing workers"
+        APP.terminate()
+        APP.shutdown()
+        Multiprocessing.cleanupShm()
+
     def setCat(self,CatName):
+        print>>log,"Opening catalog fits file: %s"%CatName
         self.Cat=pyfits.open(CatName)[1].data
         self.Cat=self.Cat.view(np.recarray)
         
@@ -62,25 +69,26 @@ class ClassOverdensityMap():
         # pylab.scatter(self.Cat.RA[::111],self.Cat.DEC[::111],s=3,c="black")
 
         self.Cat=self.Cat[ind]
-        
+        self.indFLAG=ind
         # pylab.scatter(self.Cat.RA[::111],self.Cat.DEC[::111],s=10,c="red")
         # pylab.show()
         
 
         
-        self.DicoDATA["RA"]=self.Cat.RA[:]
-        self.DicoDATA["DEC"]=self.Cat.DEC[:]
+        self.DicoDATA["RA"]=self.Cat.RA[:]*np.pi/180
+        self.DicoDATA["DEC"]=self.Cat.DEC[:]*np.pi/180
 
     def setPz(self,PzFile):
+        print>>log,"Opening p-z hdf5 file: %s"%PzFile
         H=tables.open_file(PzFile)
         self.DicoDATA["zgrid_pz"]=H.root.zgrid[:]
-        self.DicoDATA["pz"]=H.root.Pz[:]
+        self.DicoDATA["pz"]=H.root.Pz[:][self.indFLAG].copy()
         H.close()
         
     def _giveDensityAtRaDec(self,ipix):
         self.DicoDATA.reload()
         ra,dec=self.rag.flat[ipix],self.decg.flat[ipix]
-        print ra,dec
+
         RA,DEC=self.DicoDATA["RA"],self.DicoDATA["DEC"]
         D=AngDist(ra,dec,RA,DEC)
         pz=self.DicoDATA["pz"]
@@ -90,10 +98,18 @@ class ClassOverdensityMap():
             z0,z1=self.zg[iz],self.zg[iz+1]
             zm=(z0+z1)/2.
             indz=np.where((zgrid_pz>z0)&(zgrid_pz<z1))[0]
-            R=cosmo.arcsec_per_kpc_comoving(zm).to_value()*self.ScaleKpc/3600.
+            R=cosmo.arcsec_per_kpc_comoving(zm).to_value()*self.ScaleKpc/3600.*np.pi/180
             ind=np.where(D<R)[0]
             #if ind.size==0: continue
             #if indz.size==0: continue
+            
+            # pylab.clf()
+            # pylab.scatter(RA,DEC,s=1,c="black")
+            # pylab.scatter(RA[ind],DEC[ind],s=10,c="red")
+            # pylab.scatter([ra],[dec],s=30,c="blue",marker="+")
+            # pylab.scatter(self.rag.flat[:],self.decg.flat[:],s=30,c="blue")
+            # pylab.show()
+            
             PP=pz[ind][:,indz].flatten()
             indnan=np.logical_not(np.isnan(PP))
             
@@ -105,8 +121,9 @@ class ClassOverdensityMap():
 
     def giveDensityGrid(self):
 
+        print>>log,"Compute overdensity grid..."
         self.DicoDATA["ngrid"]=np.zeros(self.rag.shape,np.float32)
-        print self.DicoDATA["ngrid"]
+
         for ipix in np.arange(self.rag.size):
             #print ipix
             #self.DicoDATA["ngrid"].flat[ipix]=self._giveDensityAtRaDec(ipix)
@@ -127,9 +144,10 @@ def test():
     Cat="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_hpx_public.fits"
     Pz="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_public_pz.hdf"
     rac,decc=241.25047,55.624223
-    COM=ClassOverdensityMap(rac,decc,2.)
+    COM=ClassOverdensityMap(rac,decc,.5)
     COM.setCat(Cat)
     COM.setPz(Pz)
     COM.finaliseInit()
     #COM.giveDensityAtRaDec(rac,decc)
     COM.giveDensityGrid()
+    COM.killWorkers()
