@@ -5,9 +5,11 @@ import astropy.io.fits as pyfits
 from astropy.cosmology import WMAP9 as cosmo
 import tables
 import matplotlib.pyplot as pylab
-
-from DDFacet.Other import MyLogger
-log=MyLogger.getLogger("ClassOverdensityMap")
+from astropy.wcs import WCS
+from astropy.io import fits as fitsio
+from pyrap.images import image as CasaImage
+from DDFacet.Other import logger
+log = logger.getLogger("ClassOverdensityMap")
 from DDFacet.Array import shared_dict
 from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 from DDFacet.Other import Multiprocessing
@@ -30,7 +32,7 @@ def AngDist(ra0,dec0,ra1,dec1):
 
 
 class ClassOverdensityMap():
-    def __init__(self,ra,dec,boxDeg,NPix=31,ScaleKpc=200,z=[0.01,2.,20],NCPU=0):
+    def __init__(self,ra,dec,boxDeg,NPix=301,ScaleKpc=200,z=[0.01,2.,20],NCPU=0):
         self.rac=ra*np.pi/180
         self.decc=dec*np.pi/180
         self.boxDeg=boxDeg*np.pi/180
@@ -41,7 +43,7 @@ class ClassOverdensityMap():
                                     self.decc-self.boxDeg:self.decc+self.boxDeg:1j*NPix]
 
         self.NCPU=NCPU
-
+        self.MaskFits=None
 
         self.DicoDATA = shared_dict.create("DATA")
 
@@ -64,26 +66,84 @@ class ClassOverdensityMap():
         
         ind=np.where((self.Cat.FLAG_CLEAN == 1)&(self.Cat.i_fluxerr > 0)&
                      (self.Cat.ch2_swire_fluxerr > 0))[0]
-
-        # pylab.clf()
-        # pylab.scatter(self.Cat.RA[::111],self.Cat.DEC[::111],s=3,c="black")
-
+        
         self.Cat=self.Cat[ind]
         self.indFLAG=ind
-        # pylab.scatter(self.Cat.RA[::111],self.Cat.DEC[::111],s=10,c="red")
-        # pylab.show()
+
+        self.Cat.RA*=np.pi/180
+        self.Cat.DEC*=np.pi/180
+
+        RA=self.Cat.RA
+        DEC=self.Cat.DEC
         
+        if self.MaskFits:
+            print>>log, "Flagging in-mask sources..."
+            FLAGMASK=np.bool8(np.array([self.GiveMaskFlag(RA[iS],DEC[iS]) for iS in range(self.Cat.RA.size)]))
+            #FLAGMASK.fill(1)
+            RA=RA[FLAGMASK]
+            DEC=DEC[FLAGMASK]
+            print>>log, "  done ..."
+        
+        self.DicoDATA["RA"]=RA[:]
+        self.DicoDATA["DEC"]=DEC[:]
+
+    def RaDecToMaskPix(self,ra,dec):
+        if abs(ra)>2*np.pi: stop
+        if abs(dec)>2*np.pi: stop
+        f,p=self.fp
+        _,_,xc,yc=self.MaskCasaImage.topixel([f,p,dec,ra])
+        xc,yc=int(xc),int(yc)
+        return xc,yc
+        
+    def GiveMaskFlag(self,ra,dec):
+        xc,yc=self.RaDecToMaskPix(ra,dec)
+        FLAG=self.MaskArray[0,0,xc,yc]
+        return 1-FLAG
+    
+    def setMask(self,MaskImage):
+        print>>log,"Opening mask image: %s"%MaskImage
+        self.MaskFits=pyfits.open(MaskImage)[0]
+        self.MaskArray=self.MaskFits.data
+        self.MaskCasaImage=CasaImage(MaskImage)
+        f,p,_,_=self.MaskCasaImage.toworld([0,0,0,0])
+        self.fp=f,p
+        self.CDELT=abs(self.MaskFits.header["CDELT1"])
+
+    def giveFracMasked(self,ra,dec,R):
+        xc,yc=self.RaDecToMaskPix(ra,dec)
+        Rpix=int(R/self.CDELT)
+        ThisMask=self.MaskArray[0,0,xc-Rpix:xc+Rpix+1,yc-Rpix:yc+Rpix+1]
+        x,y=np.mgrid[-Rpix:Rpix+1,-Rpix:Rpix+1]
+        r=np.sqrt(x**2+y**2)
+        ThisMask[r>Rpix]=-1
+        UsedArea_pix=(np.where(ThisMask==0)[0]).size
+        Area_pix=(np.where(ThisMask!=-1)[0]).size
+        if Area_pix!=0:
+            frac=UsedArea_pix/float(Area_pix)
+        else:
+            frac=1.
+
+        if frac==0: frac=-1.
+        if frac<0.5: frac=-1
+        # pylab.clf()
+        # pylab.imshow(ThisMask,interpolation="nearest")
+        # pylab.draw()
+        # pylab.show(False)
+        # pylab.pause(0.1)
+        # stop
+        # print frac
+        return frac
 
         
-        self.DicoDATA["RA"]=self.Cat.RA[:]*np.pi/180
-        self.DicoDATA["DEC"]=self.Cat.DEC[:]*np.pi/180
-
     def setPz(self,PzFile):
         print>>log,"Opening p-z hdf5 file: %s"%PzFile
         H=tables.open_file(PzFile)
         self.DicoDATA["zgrid_pz"]=H.root.zgrid[:]
         self.DicoDATA["pz"]=H.root.Pz[:][self.indFLAG].copy()
         H.close()
+
+    #def _giveFractionMasked(self,ra,dec,rad):
+        
         
     def _giveDensityAtRaDec(self,ipix):
         self.DicoDATA.reload()
@@ -112,9 +172,14 @@ class ClassOverdensityMap():
             
             PP=pz[ind][:,indz].flatten()
             indnan=np.logical_not(np.isnan(PP))
-            
-            n+=np.sum(PP[indnan])
-            if np.isnan(n): stop
+            frac=self.giveFracMasked(ra,dec,R)
+            if frac>0:
+                n+=np.sum(PP[indnan])/frac
+            else:
+                self.DicoDATA["ngrid_mask"].flat[ipix]=1
+            if np.isnan(n):
+                print "cata"
+
             #print n
             
         self.DicoDATA["ngrid"].flat[ipix]=n
@@ -123,6 +188,7 @@ class ClassOverdensityMap():
 
         print>>log,"Compute overdensity grid..."
         self.DicoDATA["ngrid"]=np.zeros(self.rag.shape,np.float32)
+        self.DicoDATA["ngrid_mask"]=np.zeros(self.rag.shape,np.float32)
 
         for ipix in np.arange(self.rag.size):
             #print ipix
@@ -134,17 +200,24 @@ class ClassOverdensityMap():
                        args=(ipix,))#,serial=True)
         APP.awaitJobResults("giveDensityAtRaDec:*", progress="Compute")
 
+
+        G=self.DicoDATA["ngrid"]
+        M=self.DicoDATA["ngrid_mask"]
+        G[M==1]=0
         pylab.clf()
-        pylab.imshow(self.DicoDATA["ngrid"],interpolation="nearest")
-        pylab.show()
-        
+        pylab.imshow(G,interpolation="nearest")
+        pylab.draw()
+        pylab.show(False)
+
         
 def test():
 
     Cat="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_hpx_public.fits"
     Pz="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_public_pz.hdf"
+    MaskImage="/data/tasse/DataDeepFields/EN1/optical_images/iband/EL_EN1_iband.fits.mask.fits"
     rac,decc=241.25047,55.624223
-    COM=ClassOverdensityMap(rac,decc,.5)
+    COM=ClassOverdensityMap(rac,decc,.1)
+    COM.setMask(MaskImage)
     COM.setCat(Cat)
     COM.setPz(Pz)
     COM.finaliseInit()
