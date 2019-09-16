@@ -5,6 +5,8 @@ import optparse
 import numpy as np
 import os
 import pickle
+from DDFacet.Other import logger
+log = logger.getLogger("CutFits")
 
 
 def read_options():
@@ -42,25 +44,23 @@ def CutFits(InFile=None,OutFile=None,Ra=None,Dec=None,N=100,Overwrite=True,dPix=
     N=int(N)
     if boxArcMin is not None:
         dPixDeg=abs(w.wcs.cd.flat[0])
-        N=int((boxArcMin/60.)/dPixDeg)
+        N=int((boxArcMin/60.)/dPixDeg/2)
         
     if Ra is None:
         Ra=w.wcs.crval[0]
     if Dec is None:
         Dec=w.wcs.crval[1]
 
-    print Ra,Dec
-    print "Centering on (Ra, Dec) = %f, %f"%(Ra,Dec)
+    print>>log, "Centering on (Ra, Dec) = %f, %f"%(Ra,Dec)
     xc,yc=w.all_world2pix(Ra,Dec,1)
     xc=int(xc[()])
     yc=int(yc[()])
-    print xc,yc,N
     
     newf.data = f[0].data[yc-N:yc+N:dPix,xc-N:xc+N:dPix]
     newf.header = f[0].header
     newf.header.update(w[yc-N:yc+N:dPix,xc-N:xc+N:dPix].to_header())
 
-    print newf.data.shape
+
 
     # newf.data = f[0].data[0,0,yc-N:yc+N,xc-N:xc+N]
     # newf.header = f[0].header
@@ -74,7 +74,7 @@ def CutFits(InFile=None,OutFile=None,Ra=None,Dec=None,N=100,Overwrite=True,dPix=
     
     if os.path.isfile(OutFile):
         os.system("rm %s"%OutFile)
-    print "Writting image %s"%OutFile
+    print>>log, "Writting image %s"%OutFile
     newf.writeto(OutFile)
     return newf.data
 

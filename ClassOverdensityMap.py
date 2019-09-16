@@ -16,6 +16,14 @@ from DDFacet.Other import Multiprocessing
 from DDFacet.Other import ModColor
 from DDFacet.Other.progressbar import ProgressBar
 from DDFacet.Other import AsyncProcessPool
+import ClassDisplayRGB
+import ClassSaveFITS
+from DDFacet.ToolsDir import ModCoord
+
+NamesRGB=["/data/tasse/DataDeepFields/EN1/optical_images/sw2band/EL_EN1_sw2band.fits",
+          "/data/tasse/DataDeepFields/EN1/optical_images/Kband/EL_EN1_Kband.fits",
+          "/data/tasse/DataDeepFields/EN1/optical_images/iband/EL_EN1_iband.fits"]
+
 
 def AngDist(ra0,dec0,ra1,dec1):
     AC=np.arccos
@@ -32,20 +40,37 @@ def AngDist(ra0,dec0,ra1,dec1):
 
 
 class ClassOverdensityMap():
-    def __init__(self,ra,dec,boxDeg,NPix=301,ScaleKpc=200,z=[0.01,2.,20],NCPU=0):
+    def __init__(self,ra,dec,CellDeg=0.01,NPix=71,ScaleKpc=100,z=[0.01,2.,20],NCPU=0):
+        self.rac_deg,self.dec_deg=ra,dec
         self.rac=ra*np.pi/180
         self.decc=dec*np.pi/180
-        self.boxDeg=boxDeg*np.pi/180
+        self.CellDeg=CellDeg
+        self.CellRad=CellDeg*np.pi/180
+        boxDeg=CellDeg*NPix
+        self.boxDeg=boxDeg
+        self.boxRad=boxDeg*np.pi/180
         self.NPix=NPix
         self.ScaleKpc=ScaleKpc
         self.zg=np.linspace(*z)
-        self.rag,self.decg=np.mgrid[self.rac-self.boxDeg:self.rac+self.boxDeg:1j*NPix,
-                                    self.decc-self.boxDeg:self.decc+self.boxDeg:1j*NPix]
+        self.CoordMachine = ModCoord.ClassCoordConv(self.rac, self.decc)
+        nn=NPix//2
+        lg,mg=np.mgrid[-nn*self.CellRad:nn*self.CellRad:1j*self.NPix,-nn*self.CellRad:nn*self.CellRad:1j*self.NPix]
+        rag,decg=self.CoordMachine.lm2radec(lg.flatten(),mg.flatten())
+        self.rag=rag.reshape(lg.shape)
+        self.decg=decg.reshape(lg.shape)
 
         self.NCPU=NCPU
         self.MaskFits=None
 
         self.DicoDATA = shared_dict.create("DATA")
+
+    def showRGB(self):
+        DRGB=ClassDisplayRGB.ClassDisplayRGB(*NamesRGB)
+        radec=[self.rac_deg,self.dec_deg]
+        DRGB.setRaDec(*radec)
+        DRGB.setBoxArcMin(self.boxDeg*60)
+        DRGB.CutFits()
+        DRGB.Display()
 
     def finaliseInit(self):
         APP.registerJobHandlers(self)
@@ -75,6 +100,8 @@ class ClassOverdensityMap():
 
         RA=self.Cat.RA
         DEC=self.Cat.DEC
+        MASS=np.log10(self.Cat.K_flux)
+        # MASS.fill(1.)
         
         if self.MaskFits:
             print>>log, "Flagging in-mask sources..."
@@ -82,10 +109,12 @@ class ClassOverdensityMap():
             #FLAGMASK.fill(1)
             RA=RA[FLAGMASK]
             DEC=DEC[FLAGMASK]
+            MASS=MASS[FLAGMASK]
             print>>log, "  done ..."
         
         self.DicoDATA["RA"]=RA[:]
         self.DicoDATA["DEC"]=DEC[:]
+        self.DicoDATA["MASS"]=MASS[:]
 
     def RaDecToMaskPix(self,ra,dec):
         if abs(ra)>2*np.pi: stop
@@ -150,6 +179,7 @@ class ClassOverdensityMap():
         ra,dec=self.rag.flat[ipix],self.decg.flat[ipix]
 
         RA,DEC=self.DicoDATA["RA"],self.DicoDATA["DEC"]
+        MASS=self.DicoDATA["MASS"]
         D=AngDist(ra,dec,RA,DEC)
         pz=self.DicoDATA["pz"]
         n=0
@@ -158,10 +188,11 @@ class ClassOverdensityMap():
             z0,z1=self.zg[iz],self.zg[iz+1]
             zm=(z0+z1)/2.
             indz=np.where((zgrid_pz>z0)&(zgrid_pz<z1))[0]
-            R=cosmo.arcsec_per_kpc_comoving(zm).to_value()*self.ScaleKpc/3600.*np.pi/180
+            f_kpc2arcsec=cosmo.arcsec_per_kpc_comoving(zm).to_value()
+            R=f_kpc2arcsec*self.ScaleKpc/3600.*np.pi/180
             ind=np.where(D<R)[0]
-            #if ind.size==0: continue
-            #if indz.size==0: continue
+            if ind.size==0: continue
+            if indz.size==0: continue
             
             # pylab.clf()
             # pylab.scatter(RA,DEC,s=1,c="black")
@@ -169,8 +200,15 @@ class ClassOverdensityMap():
             # pylab.scatter([ra],[dec],s=30,c="blue",marker="+")
             # pylab.scatter(self.rag.flat[:],self.decg.flat[:],s=30,c="blue")
             # pylab.show()
-            
-            PP=pz[ind][:,indz].flatten()
+
+            Dkpc=D[ind]*(180/np.pi*3600)/f_kpc2arcsec
+            w=np.exp(-Dkpc**2/(2.*self.ScaleKpc**2))
+            #print w
+            #w.fill(1.)
+            M=MASS[ind]
+            PP=(w.reshape((-1,1))*M.reshape((-1,1))*pz[ind][:,indz]).flatten()
+            #PP=(w.reshape((-1,1))*pz[ind][:,indz]).flatten()
+            #PP=pz[ind][:,indz].flatten()
             indnan=np.logical_not(np.isnan(PP))
             frac=self.giveFracMasked(ra,dec,R)
             if frac>0:
@@ -179,7 +217,7 @@ class ClassOverdensityMap():
                 self.DicoDATA["ngrid_mask"].flat[ipix]=1
             if np.isnan(n):
                 print "cata"
-
+                stop
             #print n
             
         self.DicoDATA["ngrid"].flat[ipix]=n
@@ -204,19 +242,37 @@ class ClassOverdensityMap():
         G=self.DicoDATA["ngrid"]
         M=self.DicoDATA["ngrid_mask"]
         G[M==1]=0
+        fig=pylab.figure("Overdensity",figsize=(10,10))
         pylab.clf()
-        pylab.imshow(G,interpolation="nearest")
+        pylab.imshow(G.T[::-1,::-1],interpolation="nearest")
         pylab.draw()
         pylab.show(False)
 
+    def SaveFITS(self,Name="Test.fits"):
+        G=self.DicoDATA["ngrid"]
+        GG=G.reshape((1,self.NPix,self.NPix))
+        im=ClassSaveFITS.ClassSaveFITS(Name,
+                                       GG.shape,
+                                       self.CellDeg,
+                                       (self.rac,self.decc))#, Freqs=np.linspace(1400e6,1500e6,20))
+        im.setdata(G.T[:,::-1].astype(np.float32))#,CorrT=True)
+        im.ToFits()
+        im.close()
         
-def test():
+def test(Show=True):
 
     Cat="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_hpx_public.fits"
     Pz="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_public_pz.hdf"
     MaskImage="/data/tasse/DataDeepFields/EN1/optical_images/iband/EL_EN1_iband.fits.mask.fits"
-    rac,decc=241.25047,55.624223
-    COM=ClassOverdensityMap(rac,decc,.1)
+    rac,decc=241.20678,55.59485 # cluster
+    #rac,decc=240.36069,55.522467 # star
+    #rac,decc=radec
+    COM=ClassOverdensityMap(rac,decc,
+                            CellDeg=0.002,
+                            NPix=101,
+                            ScaleKpc=100)
+    if Show:
+        COM.showRGB()
     COM.setMask(MaskImage)
     COM.setCat(Cat)
     COM.setPz(Pz)
@@ -224,3 +280,4 @@ def test():
     #COM.giveDensityAtRaDec(rac,decc)
     COM.giveDensityGrid()
     COM.killWorkers()
+    COM.SaveFITS()

@@ -3,13 +3,15 @@ import numpy as np
 import pylab
 import os
 import img_scale
+from DDFacet.Other import logger
+log = logger.getLogger("ClassDisplayRGB")
 
 import ntpath
 def path_leaf(path):
     head, tail = ntpath.split(path)
     return tail or ntpath.basename(head)
 
-class ClassDisplayRBG():
+class ClassDisplayRGB():
     def __init__(self,RName,GNane,BName):
         self.Names=[RName,GNane,BName]
 
@@ -50,9 +52,12 @@ class ClassDisplayRBG():
         img[:,:,1] = ff(G, scale_min=0, scale_max=vmax)
         img[:,:,2] = ff(B, scale_min=0, scale_max=vmax)
 
+        fig=pylab.figure("RGB Composite",figsize=(10,10))
         pylab.clf()
-        pylab.imshow(img[::-1,:], aspect='equal')
-        pylab.show()
+        pylab.imshow(img[::-1,:], aspect='equal',extent=[self.ra-self.boxArcMin/2/60.,self.ra+self.boxArcMin/2/60.,self.dec-self.boxArcMin/2/60.,self.dec+self.boxArcMin/2/60.])
+        pylab.draw()
+        pylab.show(False)
+        pylab.pause(0.1)
         #pylab.title('Blue = J, Green = H, Red = K')
         #pylab.savefig('my_rgb_image.png')
         
@@ -61,7 +66,7 @@ def test():
     Names=["/data/tasse/DataDeepFields/EN1/optical_images/sw2band/EL_EN1_sw2band.fits",
            "/data/tasse/DataDeepFields/EN1/optical_images/Kband/EL_EN1_Kband.fits",
            "/data/tasse/DataDeepFields/EN1/optical_images/iband/EL_EN1_iband.fits"]
-    DRGB=ClassDisplayRBG(*Names)
+    DRGB=ClassDisplayRGB(*Names)
     radec=[241.51386,55.424]
     DRGB.setRaDec(*radec)
     DRGB.setBoxArcMin(20.)
