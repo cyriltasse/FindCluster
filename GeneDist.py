@@ -60,7 +60,7 @@ class ClassDistMachine():
         pass
         
     def setCumulDist(self,x,y):
-        self.xyCumulDist=x,y
+        self.xyCumulD=x,y
 
     
     def setRefSample(self,X,W=None,Ns=100,xmm=None):
