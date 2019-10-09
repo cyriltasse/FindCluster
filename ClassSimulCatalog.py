@@ -24,22 +24,10 @@ import ClassDisplayRGB
 import ClassSaveFITS
 from DDFacet.ToolsDir import ModCoord
 import scipy.signal
-import ClassGammaMachine
+import ClassMassFunction
 
-def testFontana():
 
-    z=np.linspace(0,3,10)
-    M=np.linspace(8,12,100)
-    pylab.clf()
-    for iz in range(z.size):
-        Phi=givePhiM(z[iz],M)
-        pylab.plot(M,np.log10(Phi))
-        pylab.draw()
-        pylab.show(False)
-        pylab.pause(0.1)
-        
 def givePhiM(z,M):
-    return np.ones_like(M)
     M0s= 11.16
     M1s= +0.17
     M2s= -0.07
@@ -55,6 +43,7 @@ def givePhiM(z,M):
     Phi=Phi_s(z) * np.log(10) * (10**(M-M_s(z)))**(1+alpha_s(z)) * np.exp(-10**(M-M_s(z)))
     return Phi/H**3
 
+
 class ClassSimulCatalog():
     def __init__(self,ra,dec,z=[0.01,2.,40],ScaleKpc=500,CellDeg=0.01,NPix=71):
         self.rac_deg,self.dec_deg=ra,dec
@@ -69,29 +58,30 @@ class ClassSimulCatalog():
         self.ScaleKpc=ScaleKpc
         
         self.zg=np.linspace(*z)
-        self.CoordMachine = ModCoord.ClassCoordConv(self.rac, self.decc)
-        nn=NPix//2
-        lg,mg=np.mgrid[-nn*self.CellRad:nn*self.CellRad:1j*self.NPix,-nn*self.CellRad:nn*self.CellRad:1j*self.NPix]
-        rag,decg=self.CoordMachine.lm2radec(lg.flatten(),mg.flatten())
-        self.rag=rag.reshape(lg.shape)
-        self.decg=decg.reshape(lg.shape)
         #self.logM_g=np.linspace(8,12,20)
         self.logM_g=np.linspace(10,10.5,2)
 
-        Mode="ConvGaussNoise"
-        Mode="ConvPaddedFFT"
-        CGM=ClassGammaMachine.ClassGammaMachine(CellDeg,
-                                                NPix,
-                                                z=z,ScaleKpc=ScaleKpc,
-                                                Mode=Mode)
+        
+        
+        self.MassFunc=ClassMassFunction.ClassMassFunction()
 
-        self.CGM=CGM
-        self.XSimul=np.random.randn(self.CGM.NParms)
+        self.MassFunc.setGammaFunction((self.rac,self.decc),
+                                       CellDeg,
+                                       NPix,
+                                       z=z,
+                                       ScaleKpc=ScaleKpc)
+
+        self.rag=self.MassFunc.CGM.rag
+        self.decg=self.MassFunc.CGM.decg
+
+        self.XSimul=np.random.randn(self.MassFunc.CGM.NParms)
         self.XSimul.fill(0)
         self.XSimul[0]=1.
-        self.GammaCube=CGM.giveGammaCube(self.XSimul)
-
+        LX=[self.XSimul]
         
+        self.MassFunc.CGM.computeGammaCube(LX)
+        
+
     def doSimul(self):
         Cra=[]
         Cdec=[]
@@ -126,7 +116,15 @@ class ClassSimulCatalog():
                 # print Phi,dlogM,V,n0
                 for ipix in range(self.NPix):
                     for jpix in range(self.NPix):
-                        n=self.GammaCube[iz,ipix,jpix]*n0
+                        n=self.MassFunc.CGM.GammaCube[iz,ipix,jpix]*n0
+
+                        OmegaSr=self.CellRad**2
+                        
+                        n2=self.MassFunc.give_N((self.rag[ipix,jpix],self.decg[ipix,jpix]),
+                                               (z0,z1),
+                                               (M0,M1),
+                                               OmegaSr)
+                        print n,n2
                         N=scipy.stats.poisson.rvs(n)
                         # print zm,ipix,jpix,n,N
                         if N>=1:

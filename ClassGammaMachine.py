@@ -3,15 +3,32 @@ import numpy as np
 import scipy.signal
 import ClassFFT
 import matplotlib.pyplot as pylab
+from DDFacet.ToolsDir import ModCoord
 
 class ClassGammaMachine():
-    def __init__(self,CellDeg,NPix,z=[0.01,2.,40],Mode="ConvGaussNoise",ScaleKpc=100):
+    def __init__(self,
+                 radec,
+                 CellDeg,
+                 NPix,
+                 z=[0.01,2.,40],Mode="ConvGaussNoise",ScaleKpc=100):
+        self.radec=radec
+        self.rac,self.decc=self.radec
         self.CellDeg=CellDeg
         self.NPix=NPix
         self.CellRad=CellDeg*np.pi/180
         self.zg=np.linspace(*z)
         self.Mode=Mode
         self.ScaleKpc=ScaleKpc
+        
+        self.CoordMachine = ModCoord.ClassCoordConv(self.rac, self.decc)
+        nn=NPix//2
+        lg,mg=np.mgrid[-nn*self.CellRad:nn*self.CellRad:1j*self.NPix,-nn*self.CellRad:nn*self.CellRad:1j*self.NPix]
+        rag,decg=self.CoordMachine.lm2radec(lg.flatten(),mg.flatten())
+        self.rag=rag.reshape(lg.shape)
+        self.decg=decg.reshape(lg.shape)
+        self.lg,self.mg=lg,mg
+        self.GammaCube=None
+        
         if self.Mode=="ConvGaussNoise":
             self.SliceFunction=self.giveSlice_ConvGaussNoise
             self.NParms=self.NPix**2
@@ -31,7 +48,24 @@ class ClassGammaMachine():
                 N=fScalePix
                 self.fScalePix=fScalePix
                 self.NParms=(N//2*N+N//2)*2+1
-            
+
+
+    def giveGamma(self,z,ra,dec):
+        
+        if not self.GammaCube:
+            return np.ones((ra.size,),np.float32)
+        if type(z) is not float: stop
+        if type(ra) is not np.ndarray: stop
+        if type(dec) is not np.ndarray: stop
+        l,m=self.CoordMachine.radec2lm(ra,dec)
+        x=np.int32(l/self.CellRad)+self.NPix//2
+        y=np.int32(m/self.CellRad)+self.NPix//2
+        zm=(self.zg[0:-1]+self.zg[1:])/2.
+        iz=np.argmin(np.abs(zm-z))
+        nx,ny=self.GammaCube[iz].shape
+        ind=x*ny+y
+        return self.GammaCube[iz].flat[ind]
+
     def giveSlice_ConvPaddedFFT(self,x,z0,z1):
         
         # zm=(z0+z1)/2.
@@ -91,12 +125,14 @@ class ClassGammaMachine():
 
     
 
-    def giveGammaCube(self,X):
+    def computeGammaCube(self,LX):
+        if type(LX) is not list: stop
         GammaCube=np.zeros((self.zg.size-1,self.NPix,self.NPix),np.float32)
         for iz in range(self.zg.size-1):
             z0,z1=self.zg[iz],self.zg[iz+1]
-            GammaCube[iz,:,:]=self.SliceFunction(X,z0,z1)
-        return GammaCube
+            GammaCube[iz,:,:]=self.SliceFunction(LX[iz],z0,z1)
+        self.GammaCube=GammaCube
+
             
     def giveSlice_ConvGaussNoise(self,x,z0,z1):
         Mean=.5
