@@ -54,7 +54,7 @@ class ClassMassFunction():
         return Phi/H**3
 
     def give_N(self,(ra,dec),(z0,z1),(logM0,logM1),OmegaSr):
-        print ra,dec
+        # print ra,dec
         zm=(z0+z1)/2.
         dz=z1-z0
         dV_dz=cosmo.differential_comoving_volume(zm).to_value()
@@ -67,10 +67,11 @@ class ClassMassFunction():
 
         n0=Phi*dlogM*V
 
+        n=n0
         if self.CGM:
-            n=n0
-        else:
-            G=self.CGM.giveGamma(ra,dec)
-            n=G*n
+            G=self.CGM.giveGamma(zm,ra,dec)
+            n*=G
             
+        # print "  V=%f"%V
+        # print "  G=%f"%G
         return n

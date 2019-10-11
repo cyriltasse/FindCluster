@@ -45,7 +45,9 @@ def givePhiM(z,M):
 
 
 class ClassSimulCatalog():
-    def __init__(self,ra,dec,z=[0.01,2.,40],ScaleKpc=500,CellDeg=0.01,NPix=71):
+    def __init__(self,
+                 ra,dec,
+                 z=[0.01,2.,40],ScaleKpc=500,CellDeg=0.01,NPix=71,XSimul=None,logMParms=[10,10.5,2]):
         self.rac_deg,self.dec_deg=ra,dec
         self.rac=ra*np.pi/180
         self.decc=dec*np.pi/180
@@ -58,10 +60,8 @@ class ClassSimulCatalog():
         self.ScaleKpc=ScaleKpc
         
         self.zg=np.linspace(*z)
-        #self.logM_g=np.linspace(8,12,20)
-        self.logM_g=np.linspace(10,10.5,2)
 
-        
+        self.logM_g=np.linspace(*logMParms)
         
         self.MassFunc=ClassMassFunction.ClassMassFunction()
 
@@ -74,9 +74,11 @@ class ClassSimulCatalog():
         self.rag=self.MassFunc.CGM.rag
         self.decg=self.MassFunc.CGM.decg
 
-        self.XSimul=np.random.randn(self.MassFunc.CGM.NParms)
-        self.XSimul.fill(0)
-        self.XSimul[0]=1.
+        self.XSimul=XSimul
+        if self.XSimul is None:
+            self.XSimul=np.random.randn(self.MassFunc.CGM.NParms)
+            #self.XSimul.fill(0)
+            self.XSimul[0]=1.
         LX=[self.XSimul]
         
         self.MassFunc.CGM.computeGammaCube(LX)
@@ -91,15 +93,15 @@ class ClassSimulCatalog():
         CPhi_i=[]
         Ciz=[]
         for iz in range(self.zg.size-1)[::-1]:
-            print iz
+            #print iz
             z0,z1=self.zg[iz],self.zg[iz+1]
             zm=(self.zg[iz]+self.zg[iz+1])/2.
             dz=self.zg[iz+1]-self.zg[iz]
-            dV_dz=cosmo.differential_comoving_volume(zm).to_value()
+            # dV_dz=cosmo.differential_comoving_volume(zm).to_value()
 
-            V=self.CellRad**2*dz*dV_dz
-            #V2=self.CellRad**2/(4.*np.pi)*(cosmo.comoving_volume(z1).to_value()-cosmo.comoving_volume(z0).to_value())
-            #stop
+            # V=self.CellRad**2*dz*dV_dz
+            # V2=self.CellRad**2/(4.*np.pi)*(cosmo.comoving_volume(z1).to_value()-cosmo.comoving_volume(z0).to_value())
+            # stop
             
             ##ras=np.sort(self.rag.flatten())
             decs=np.sort(self.decg.flatten())
@@ -111,12 +113,17 @@ class ClassSimulCatalog():
                 M0,M1=self.logM_g[iM],self.logM_g[iM+1]
                 dlogM=M1-M0
                 Mm=(M1+M0)/2.
-                Phi=givePhiM(zm,Mm)
-                n0=Phi*dlogM*V
+                # Phi=givePhiM(zm,Mm)
+                # n0=Phi*dlogM*V
                 # print Phi,dlogM,V,n0
                 for ipix in range(self.NPix):
                     for jpix in range(self.NPix):
-                        n=self.MassFunc.CGM.GammaCube[iz,ipix,jpix]*n0
+                        # #print "====",ipix,jpix
+                        # G=self.MassFunc.CGM.GammaCube[iz,ipix,jpix]
+                        # #print "V=%f"%V
+                        # #print "G=%f"%G
+                        # n=G*n0
+                        # N=scipy.stats.poisson.rvs(n)
 
                         OmegaSr=self.CellRad**2
                         
@@ -124,8 +131,8 @@ class ClassSimulCatalog():
                                                (z0,z1),
                                                (M0,M1),
                                                OmegaSr)
-                        print n,n2
-                        N=scipy.stats.poisson.rvs(n)
+                        N=scipy.stats.poisson.rvs(n2)
+                        # print n,n2
                         # print zm,ipix,jpix,n,N
                         if N>=1:
                             ra=(np.random.rand(N)-0.5)*dra+self.rag[ipix,jpix]
@@ -136,7 +143,7 @@ class ClassSimulCatalog():
                             CM+=M.tolist()
                             Cx+=[ipix]*ra.size
                             Cy+=[jpix]*dec.size
-                            CPhi_i+=[n0]*dec.size
+                            # CPhi_i+=[n0]*dec.size
                             Ciz+=[iz]*dec.size
                             #print Phi,dlogM,V,n0,n,N
         self.Cat=np.zeros((len(Cra),),dtype=[("ra",np.float32),("dec",np.float32),
@@ -150,7 +157,7 @@ class ClassSimulCatalog():
         self.Cat.logM[:]=np.array(CM)
         self.Cat.x[:]=np.array(Cx)
         self.Cat.y[:]=np.array(Cy)
-        self.Cat.n_i[:]=np.array(CPhi_i)
+        # self.Cat.n_i[:]=np.array(CPhi_i)
         self.Cat.iz[:]=np.array(Ciz)
         
 
@@ -158,10 +165,10 @@ class ClassSimulCatalog():
                             
                             
 def testSimul():
-    
+
     rac,decc=241.20678,55.59485 # cluster
     CellDeg=0.001
-    NPix=101
+    NPix=5
     ScaleKpc=500
     CSC=ClassSimulCatalog(rac,decc,
                           #z=[0.01,2.,40],

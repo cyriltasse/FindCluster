@@ -44,7 +44,7 @@ class ClassGammaMachine():
                 fPix=freq[1]-freq[0]
                 fScalePix=int(fScaleRad/fPix)
                 if fScalePix%2==0: fScalePix+=1
-                fScalePix=3
+                fScalePix=1
                 N=fScalePix
                 self.fScalePix=fScalePix
                 self.NParms=(N//2*N+N//2)*2+1
@@ -52,17 +52,22 @@ class ClassGammaMachine():
 
     def giveGamma(self,z,ra,dec):
         
-        if not self.GammaCube:
+        if self.GammaCube is None:
             return np.ones((ra.size,),np.float32)
-        if type(z) is not float: stop
-        if type(ra) is not np.ndarray: stop
-        if type(dec) is not np.ndarray: stop
+        
+        if "float" not in str(type(z)): stop
+        if type(ra) is not np.ndarray:
+            ra=np.array([ra])
+        if type(dec) is not np.ndarray:
+            dec=np.array([dec])
+
         l,m=self.CoordMachine.radec2lm(ra,dec)
-        x=np.int32(l/self.CellRad)+self.NPix//2
-        y=np.int32(m/self.CellRad)+self.NPix//2
+        x=np.int32(np.around(l/self.CellRad))+self.NPix//2
+        y=np.int32(np.around(m/self.CellRad))+self.NPix//2
         zm=(self.zg[0:-1]+self.zg[1:])/2.
         iz=np.argmin(np.abs(zm-z))
         nx,ny=self.GammaCube[iz].shape
+        # print "giveGamma",x,y
         ind=x*ny+y
         return self.GammaCube[iz].flat[ind]
 
