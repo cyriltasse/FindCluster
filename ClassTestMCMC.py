@@ -22,7 +22,7 @@ class ClassTestMCMC():
         rac,decc=241.20678,55.59485 # cluster
         self.CellDeg=0.001
         self.CellRad=self.CellDeg*np.pi/180
-        self.NPix=101
+        self.NPix=1
         self.ScaleKpc=500
         
         np.random.seed(6)
