@@ -8,6 +8,7 @@ import GeneDist
 import ClassSimulCatalog
 import matplotlib.pyplot as pylab
 import ClassMassFunction
+from astropy.cosmology import WMAP9 as cosmo
 
 def g_z(z):
     a=2.
@@ -22,12 +23,12 @@ class ClassTestMCMC():
         rac,decc=241.20678,55.59485 # cluster
         self.CellDeg=0.001
         self.CellRad=self.CellDeg*np.pi/180
-        self.NPix=1
+        self.NPix=101
         self.ScaleKpc=500
         
         np.random.seed(6)
         self.XSimul=np.random.randn(9)*2
-        self.XSimul=np.random.randn(1)
+        #self.XSimul=np.random.randn(1)
         #self.XSimul.fill(0)
         self.XSimul[0]=10.
         self.rac_deg,self.decc_deg=rac,decc
@@ -49,21 +50,6 @@ class ClassTestMCMC():
 
         self.CSC=CSC
         
-        GammaCube=self.CSC.MassFunc.CGM.GammaCube
-        ra0,ra1=self.CSC.rag.min(),self.CSC.rag.max()
-        dec0,dec1=self.CSC.decg.min(),self.CSC.decg.max()
-        #pylab.ion()
-        pylab.figure("Simul")
-        pylab.clf()
-        pylab.imshow(GammaCube[0].T[::-1,:],extent=(ra0,ra1,dec0,dec1),cmap="cubehelix")#,vmin=0,vmax=1.)
-        #s=self.Cat.logM
-        #s0,s1=s.min(),s.max()
-        s=10.#(s-s0)/(s1-s0)*20+5.
-        pylab.scatter(self.CSC.Cat.ra,self.CSC.Cat.dec,s=s,linewidths=0)
-        #pylab.colorbar()
-        pylab.draw()
-        pylab.show(False)
-        pylab.pause(0.1)
 
         
         self.Cat=CSC.Cat
@@ -113,33 +99,62 @@ class ClassTestMCMC():
         OmegaSr=((1./3600)*np.pi/180)**2
         L=0
         for iLogM in range(self.logM_g.size-1):
-            L+=-self.CellRad**2*(np.sum(GammaSlice))
+            logM0,logM1=self.logM_g[iLogM],self.logM_g[iLogM+1]
+            logMm=(logM0+logM1)/2.
+            zm=(z0+z1)/2.
+            dz=z1-z0
+            dlogM=logM1-logM0
+            dV_dz=cosmo.differential_comoving_volume(zm).to_value()
+            V=dz*dV_dz*self.CellRad**2
+            
+            n0=MassFunc.givePhiM(zm,logMm)*dlogM*V
+            L+=-np.sum(GammaSlice)*n0
             for iS in range(self.Cat.ra.size):
-                logM0,logM1=self.logM_g[iLogM],self.logM_g[iLogM+1]
                 n=MassFunc.give_N((self.Cat.ra[iS],self.Cat.dec[iS]),
                                   (z0,z1),
                                   (logM0,logM1),
                                   OmegaSr)
                 L+=np.log(n)
-                L+=np.log(OmegaSr)
+                #L+=np.log(OmegaSr)
         return L
 
     
     
     def runMCMC(self):
         
+        GammaCube=self.CSC.MassFunc.CGM.GammaCube
+        ra0,ra1=self.CSC.rag.min(),self.CSC.rag.max()
+        dec0,dec1=self.CSC.decg.min(),self.CSC.decg.max()
+        #pylab.ion()
+        vmin=0
+        vmax=np.max(GammaCube[0])
+        pylab.figure("Simul")
+        pylab.clf()
+        pylab.imshow(GammaCube[0].T[::-1,:],extent=(ra0,ra1,dec0,dec1),cmap="cubehelix",vmin=vmin,vmax=vmax)
+        #s=self.Cat.logM
+        #s0,s1=s.min(),s.max()
+        s=10.#(s-s0)/(s1-s0)*20+5.
+        pylab.scatter(self.CSC.Cat.ra,self.CSC.Cat.dec,s=s,linewidths=0)
+        #pylab.colorbar()
+        pylab.draw()
+        pylab.show(False)
+        pylab.pause(0.1)
+
         NDim = self.CSC.MassFunc.CGM.NParms
-        NChain = 20#2*NDim
+        NChain = 4*NDim
         
         self.X=np.random.randn(NChain,NDim)*np.mean(np.abs(self.CSC.XSimul))
-        self.X=self.CSC.XSimul*100+np.random.randn(NChain,NDim)#*1e-3
+        #self.X=self.CSC.XSimul+np.random.randn(NChain,NDim)*1.
+        
         self.X1=self.X.copy()
         self.Accepted=np.zeros((NChain,),int)
         self.L=np.array([self.log_prob(x) for x in self.X])
         self.L1=self.L.copy()
         self.ListX=[]
         self.ListL=[]
+        iDone=0
         while True:
+            iDone+=1
             for iChain in range(NChain):
                 #print iChain,NChain
                 while True:
@@ -182,16 +197,33 @@ class ClassTestMCMC():
             pylab.show(False)
             pylab.pause(0.1)
             
-            # z0,z1=self.z0z1
-            # #X=np.mean(self.X,axis=0)
-            # pylab.figure("Fit")
-            # pylab.clf()
-            # GammaSlice=np.mean([self.CSC.CGM.SliceFunction(x,z0,z1) for x in self.X],axis=0)
-            # pylab.imshow(GammaSlice.T[::-1,:])#,vmin=0,vmax=1.)#,extent=(ra0,ra1,dec0,dec1))
-            # pylab.draw()
-            # pylab.show(False)
-            # pylab.pause(0.1)
+            z0,z1=self.z0z1
+            #X=np.mean(self.X,axis=0)
+            fig=pylab.figure("Fit imshow",figsize=(10,5))
+            pylab.clf()
+            
+            MassFunc=ClassMassFunction.ClassMassFunction()
+            MassFunc.setGammaFunction((self.rac,self.decc),
+                                      self.CellDeg,
+                                      self.NPix,
+                                      z=self.zParms,
+                                      ScaleKpc=self.ScaleKpc)
 
+            LSlice=[]
+            for x in self.X:
+                LX=[x]
+                MassFunc.CGM.computeGammaCube(LX)
+                LSlice.append(MassFunc.CGM.GammaCube[0])
+            GammaSlice=np.mean(np.array(LSlice),axis=0)
+            stdGammaSlice=np.std(np.array(LSlice),axis=0)
+            pylab.subplot(1,2,1)
+            pylab.imshow(GammaSlice.T[::-1,:],vmin=vmin,vmax=vmax,extent=(ra0,ra1,dec0,dec1),cmap="cubehelix")
+            pylab.subplot(1,2,2)
+            pylab.imshow(stdGammaSlice.T[::-1,:],vmin=vmin,vmax=vmax,extent=(ra0,ra1,dec0,dec1),cmap="cubehelix")
+            pylab.draw()
+            pylab.show(False)
+            pylab.pause(0.1)
+            fig.savefig("Overd%3.3i.png"%iDone)
             
 def test():
     C_MCMC=ClassTestMCMC()

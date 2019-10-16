@@ -4,6 +4,7 @@ import scipy.signal
 import ClassFFT
 import matplotlib.pyplot as pylab
 from DDFacet.ToolsDir import ModCoord
+from DDFacet.Other import ClassTimeIt
 
 class ClassGammaMachine():
     def __init__(self,
@@ -44,7 +45,7 @@ class ClassGammaMachine():
                 fPix=freq[1]-freq[0]
                 fScalePix=int(fScaleRad/fPix)
                 if fScalePix%2==0: fScalePix+=1
-                fScalePix=1
+                fScalePix=7
                 N=fScalePix
                 self.fScalePix=fScalePix
                 self.NParms=(N//2*N+N//2)*2+1

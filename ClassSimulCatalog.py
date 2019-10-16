@@ -78,7 +78,7 @@ class ClassSimulCatalog():
         if self.XSimul is None:
             self.XSimul=np.random.randn(self.MassFunc.CGM.NParms)
             #self.XSimul.fill(0)
-            self.XSimul[0]=1.
+            self.XSimul[0]=10.
         LX=[self.XSimul]
         
         self.MassFunc.CGM.computeGammaCube(LX)

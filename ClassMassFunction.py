@@ -1,6 +1,7 @@
 import ClassGammaMachine
 from astropy.cosmology import WMAP9 as cosmo
 import numpy as np
+from DDFacet.Other import ClassTimeIt
 
 def testFontana():
 
@@ -35,7 +36,7 @@ class ClassMassFunction():
                                                 Mode=Mode)
 
         self.CGM=CGM
-        if LX: self.GammaCube=self.CGM.computeGammaCube(LX)
+        if LX is not None: self.GammaCube=self.CGM.computeGammaCube(LX)
         
     def givePhiM(self,z,M):
         M0s= 11.16
@@ -74,4 +75,5 @@ class ClassMassFunction():
             
         # print "  V=%f"%V
         # print "  G=%f"%G
+        # print ra,dec,z0,z1,logM0,logM1,n
         return n
