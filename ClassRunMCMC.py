@@ -19,6 +19,7 @@ from DDFacet.Other import ClassTimeIt
 from DDFacet.Other.progressbar import ProgressBar
 from DDFacet.Other import AsyncProcessPool
 from DDFacet.Array import shared_dict
+import ClassCatalogMachine
 
 def g_z(z):
     a=4.
@@ -27,6 +28,9 @@ def g_z(z):
     g[ind]=1./z[ind]
     return g
 
+Cat="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_hpx_public.fits"
+Pz="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_public_pz.hdf"
+MaskImage="/data/tasse/DataDeepFields/EN1/optical_images/iband/EL_EN1_iband.fits.mask.fits"
 
 class ClassRunMCMC():
     def __init__(self):
@@ -49,26 +53,33 @@ class ClassRunMCMC():
         self.zParms=[0.6,0.7,2]
         self.logMParms=[10,10.5,2]
         self.logM_g=np.linspace(*self.logMParms)
-        CSC=ClassSimulCatalog.ClassSimulCatalog(rac,decc,
-                                                # z=[0.01,2.,40],
-                                                z=self.zParms,
-                                                ScaleKpc=self.ScaleKpc,
-                                                CellDeg=self.CellDeg,
-                                                NPix=self.NPix,
-                                                #XSimul=self.XSimul,
-                                                logMParms=self.logMParms)
 
+        # #################################################################
+        # # Simulate Catalog
+        # CSC=ClassSimulCatalog.ClassSimulCatalog(rac,decc,
+        #                                         # z=[0.01,2.,40],
+        #                                         z=self.zParms,
+        #                                         ScaleKpc=self.ScaleKpc,
+        #                                         CellDeg=self.CellDeg,
+        #                                         NPix=self.NPix,
+        #                                         #XSimul=self.XSimul,
+        #                                         logMParms=self.logMParms)
+        # CSC.doSimul()
+        # self.CSC=CSC
+        # self.Cat=CSC.Cat
+        # #################################################################
+
+        self.LoadData()
+        stop
         #self.XSimul
         #CSC.MassFunc.CGM.NParms
-        CSC.doSimul()
+
         self.MassFuncLogProb=None
 
 
-        self.CSC=CSC
         
 
         
-        self.Cat=CSC.Cat
         self.DistMachine=GeneDist.ClassDistMachine()
         z=np.linspace(-10,10,1000)
         g=g_z(z)
@@ -85,6 +96,19 @@ class ClassRunMCMC():
         self.DE_CR=0.5
         
         self.finaliseInit()
+        
+    def LoadData(self,Show=False):
+        CM=ClassCatalogMachine.ClassCatalogMachine(self.rac,self.decc,
+                                                   CellDeg=self.CellDeg,
+                                                   NPix=self.NPix,
+                                                   ScaleKpc=self.ScaleKpc)
+        if Show:
+            CM.showRGB()
+        CM.setMask(MaskImage)
+        CM.setCat(Cat)
+        CM.setPz(Pz)
+        self.CM=CM
+        # CM.SaveFITS(Name=NameOut)
 
     def reinitDicoChains(self,XInit=None):
         self.DicoChains = shared_dict.create("DicoChains")

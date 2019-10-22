@@ -10,10 +10,7 @@ from astropy.wcs import WCS
 from astropy.io import fits as fitsio
 from pyrap.images import image as CasaImage
 from DDFacet.Other import logger
-log = logger.getLogger("ClassOverdensityMap")
-from DDFacet.Array import shared_dict
-from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
-from DDFacet.Other import Multiprocessing
+log = logger.getLogger("ClassCatalogMachine")
 from DDFacet.Other import ModColor
 from DDFacet.Other.progressbar import ProgressBar
 from DDFacet.Other import AsyncProcessPool
@@ -48,7 +45,7 @@ def AngDist(ra0,dec0,ra1,dec1):
         if D<-1.: D=-1.
     return AC(D)
 
-class ClassOverdensityMap():
+class ClassCatalogMachine():
     def __init__(self,ra,dec,CellDeg=0.01,NPix=71,ScaleKpc=100,z=[0.01,2.,40],NCPU=0,CubeMode=True):
         self.rac_deg,self.dec_deg=ra,dec
         self.rac=ra*np.pi/180
@@ -70,7 +67,7 @@ class ClassOverdensityMap():
 
         self.NCPU=NCPU
         self.MaskFits=None
-        self.DicoDATA = shared_dict.create("DATA")
+        self.DicoDATA={}
 
     def showRGB(self):
         DRGB=ClassDisplayRGB.ClassDisplayRGB()
@@ -81,18 +78,6 @@ class ClassOverdensityMap():
         DRGB.FitsToArray()
         DRGB.Display(NamePNG="RGBOut.png",vmax=500)
 
-
-    def finaliseInit(self):
-        APP.registerJobHandlers(self)
-        AsyncProcessPool.init(ncpu=self.NCPU,
-                              affinity=0)
-        APP.startWorkers()
-
-    def killWorkers(self):
-        print>>log, "Killing workers"
-        APP.terminate()
-        APP.shutdown()
-        Multiprocessing.cleanupShm()
 
     def setCat(self,CatName):
         print>>log,"Opening catalog fits file: %s"%CatName
@@ -195,174 +180,9 @@ class ClassOverdensityMap():
         H=tables.open_file(PzFile)
         self.DicoDATA["zgrid_pz"]=H.root.zgrid[:]
         self.DicoDATA["pz"]=H.root.Pz[:][self.CatRange].copy()
+        
+        
         H.close()
-        #print self.DicoDATA["pz"].shape,self.Cat.shape
-        
-
-    #def _giveFractionMasked(self,ra,dec,rad):
-    #def _giveLum(self,K_flux,z):
-
-    def _randomiseCatalog(self):
-        RA,DEC=self.DicoDATA["RA"],self.DicoDATA["DEC"]
-        self.RA_orig,self.DEC_orig=self.DicoDATA["RA"].copy(),self.DicoDATA["DEC"].copy()
-        ra0,ra1=RA.min(),RA.max()
-        dec0,dec1=DEC.min(),DEC.max()
-        ram=RA
-        decm=DEC
-        ras=np.array([],np.float32)
-        decs=np.array([],np.float32)
-        print>>log,"Generating randomised catalog..."
-        while True:
-            ra=ra0+np.random.rand(ram.size)*(ra1-ra0)
-            dec=dec0+np.random.rand(decm.size)*(dec1-dec0)
-            #print ram.size
-            FLAGMASK=np.bool8(np.array([self.GiveMaskFlag(ra[iS],dec[iS]) for iS in range(ra.size)]))
-            #print "f"
-            if FLAGMASK.any():
-                ras=np.concatenate([ras,ra[FLAGMASK]])
-                decs=np.concatenate([decs,dec[FLAGMASK]])
-            if (FLAGMASK==0).any():
-                ram=ra[FLAGMASK==0]
-                decm=dec[FLAGMASK==0]
-            else:
-                break
-            
-        print>>log,"  done..."
-            
-        self.DicoDATA["RA"][:]=ras.flat[:]
-        self.DicoDATA["DEC"][:]=decs.flat[:]
-
-    def _giveDensityAtRaDec(self,ipix,GridName):
-        self.DicoDATA.reload()
-        ra,dec=self.rag.flat[ipix],self.decg.flat[ipix]
-
-        RA,DEC=self.DicoDATA["RA"],self.DicoDATA["DEC"]
-        K_flux=self.DicoDATA["K"]
-        D=AngDist(ra,dec,RA,DEC)
-        pz=self.DicoDATA["pz"]
-        n=0
-        zgrid_pz=self.DicoDATA["zgrid_pz"]
-        for iz in range(self.zg.size-1):
-            z0,z1=self.zg[iz],self.zg[iz+1]
-            zm=(z0+z1)/2.
-            indz=np.where((zgrid_pz>z0)&(zgrid_pz<z1))[0]
-            f_kpc2arcsec=cosmo.arcsec_per_kpc_comoving(zm).to_value()
-            
-            R=f_kpc2arcsec*self.ScaleKpc/3600.*np.pi/180
-            ind=np.where(D<3*R)[0]
-            #ind=np.where(D<R)[0]
-            if ind.size==0:
-                self.DicoDATA["%s_mask"%GridName][iz].flat[ipix]=1
-                continue
-            if indz.size==0: continue
-            
-            # pylab.clf()
-            # pylab.scatter(RA,DEC,s=1,c="black")
-            # pylab.scatter(RA[ind],DEC[ind],s=10,c="red")
-            # pylab.scatter([ra],[dec],s=30,c="blue",marker="+")
-            # pylab.scatter(self.rag.flat[:],self.decg.flat[:],s=30,c="blue")
-            # pylab.show()
-
-            Dkpc=D[ind]*(180/np.pi*3600)/f_kpc2arcsec
-            w=np.exp(-Dkpc**2/(2.*self.ScaleKpc**2))
-            #print w
-            #w.fill(1.)
-            #M=MASS[ind]
-            Dl=cosmo.luminosity_distance(zm).to_value()
-            Fint=K_flux[ind]*4.*np.pi*Dl**2
-            if (Fint<=0).any(): stop
-            M=np.log10(Fint)
-            # w.fill(1.)
-            M.fill(1.)
-            
-            PP=(w.reshape((-1,1))*M.reshape((-1,1))*pz[ind][:,indz]).flatten()
-            # PP=(w.reshape((-1,1))*pz[ind][:,indz]).flatten()
-            # PP=pz[ind][:,indz].flatten()
-            indnan=np.logical_not(np.isnan(PP))
-            frac=self.giveFracMasked(ra,dec,R)
-            if frac>0.6:
-                #n+=np.sum(PP[indnan])/frac
-                self.DicoDATA["%s"%GridName][iz].flat[ipix]=np.sum(PP[indnan])/frac
-            else:
-                self.DicoDATA["%s_mask"%GridName][iz].flat[ipix]=1
-
-            self.DicoDATA["%s_mask"%GridName][iz].flat[ipix]=1-self.GiveMaskFlag(ra,dec)
-            
-            if np.isnan(n):
-                print "cata"
-                stop
-
-            
-        #self.DicoDATA["ngrid"].flat[ipix]=n
-
-    def giveDensityGrid(self,Randomize=False):
-        nx,ny=self.rag.shape
-        nch=self.zg.size-1
-        self.nch=nch
-        if not Randomize:
-            print>>log,"Will be working on original catalogs"
-            self.DicoDATA["RA"][:]=self.RA_orig
-            self.DicoDATA["DEC"][:]=self.DEC_orig
-            GridName="ngrid"
-        else:
-            print>>log,"Will be working on randomized catalogs"
-            self._randomiseCatalog()
-            GridName="ngrid_rand"
-           
-        
-        self.DicoDATA["%s"%GridName]=np.zeros((nch,nx,ny),np.float32)
-        self.DicoDATA["%s_mask"%GridName]=np.zeros((nch,nx,ny),np.float32)
-       
-        print>>log,"Compute overdensity grid..."
-
-        for ipix in np.arange(self.rag.size):
-            #print ipix
-            #self.DicoDATA["ngrid"].flat[ipix]=self._giveDensityAtRaDec(ipix)
-            
-
-            APP.runJob("giveDensityAtRaDec:%i"%(ipix), 
-                       self._giveDensityAtRaDec,
-                       args=(ipix,GridName))#,serial=True)
-        APP.awaitJobResults("giveDensityAtRaDec:*", progress="Compute")
-
-    def normaliseCube(self):
-        print>>log,"Nomalising cube..."
-        nch,_,_=self.DicoDATA["ngrid"].shape
-        G=self.DicoDATA["ngrid"]
-        M=self.DicoDATA["ngrid_mask"]
-
-        Gr=self.DicoDATA["ngrid_rand"]
-        Mr=self.DicoDATA["ngrid_rand_mask"]
-        Gr[Mr==1]=0
-
-        for ich in range(nch):
-            Mean=np.mean(Gr[ich][Mr[ich]==0])
-            Std=np.std(Gr[ich][Mr[ich]==0])
-            if Mean==0:
-                print>>log,"Channel %i (z=[%3.1f,%3.1f]) is empty"%(ich,self.zg[ich],self.zg[ich+1])
-                continue
-            G[ich]-=Mean
-            G[ich]/=Std
-
-            # Mean=np.mean(G[ich][M[ich]==0])
-            # Std=np.std(G[ich][M[ich]==0])
-            # if Mean==0:
-            #     print>>log,"Channel %i (z=[%3.1f,%3.1f]) is empty"%(ich,self.zg[ich],self.zg[ich+1])
-            #     continue
-            # G[ich]-=Mean
-            # G[ich]/=Mean
-            
-
-            
-        G[M==1]=0
-        
-        for ich in range(nch):
-            fig=pylab.figure("Overdensity",figsize=(10,10))
-            pylab.clf()
-            pylab.imshow(G[ich].T[::-1,::-1],interpolation="nearest")
-            pylab.draw()
-            pylab.show(False)
-            pylab.pause(0.1)
 
     def SaveFITS(self,Name="Test.fits"):
         G=self.DicoDATA["ngrid"]
@@ -379,8 +199,6 @@ class ClassOverdensityMap():
         im.setdata(Gd.astype(np.float32))#,CorrT=True)
         im.ToFits()
         im.close()
-
-
         DRGB=ClassDisplayRGB.ClassDisplayRGB()
         DRGB.setRGB_FITS(*NamesRGB)
         radec=[self.rac_deg,self.dec_deg]
