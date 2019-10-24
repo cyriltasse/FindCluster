@@ -20,10 +20,6 @@ from DDFacet.ToolsDir import ModCoord
 import RecArrayOps
 from DDFacet.Other import MyPickle
 
-NamesRGB=["/data/tasse/DataDeepFields/EN1/optical_images/sw2band/EL_EN1_sw2band.fits",
-          "/data/tasse/DataDeepFields/EN1/optical_images/Kband/EL_EN1_Kband.fits",
-          "/data/tasse/DataDeepFields/EN1/optical_images/iband/EL_EN1_iband.fits"]
-
 # # ##############################
 # # Catch numpy warning
 # np.seterr(all='raise')
@@ -48,39 +44,11 @@ def AngDist(ra0,dec0,ra1,dec1):
     return AC(D)
 
 class ClassCatalogMachine():
-    def __init__(self,ra,dec,CellDeg=0.01,NPix=71,ScaleKpc=100,z=[0.01,2.,40],NCPU=0,CubeMode=True):
-        self.rac_deg,self.dec_deg=ra,dec
-        self.rac=ra*np.pi/180
-        self.decc=dec*np.pi/180
-        self.CellDeg=CellDeg
-        self.CellRad=CellDeg*np.pi/180
-        boxDeg=CellDeg*NPix
-        self.boxDeg=boxDeg
-        self.boxRad=boxDeg*np.pi/180
-        self.NPix=NPix
-        self.ScaleKpc=ScaleKpc
-        self.zg=np.linspace(*z)
-        self.CoordMachine = ModCoord.ClassCoordConv(self.rac, self.decc)
-        nn=NPix//2
-        lg,mg=np.mgrid[-nn*self.CellRad:nn*self.CellRad:1j*self.NPix,-nn*self.CellRad:nn*self.CellRad:1j*self.NPix]
-        rag,decg=self.CoordMachine.lm2radec(lg.flatten(),mg.flatten())
-        self.rag=rag.reshape(lg.shape)
-        self.decg=decg.reshape(lg.shape)
-
-        self.NCPU=NCPU
+    def __init__(self):
         self.MaskFits=None
         self.DicoDATA={}
         self.PhysCat=None
-        
-    def showRGB(self):
-        DRGB=ClassDisplayRGB.ClassDisplayRGB()
-        DRGB.setRGB_FITS(*NamesRGB)
-        radec=[self.rac_deg,self.dec_deg]
-        DRGB.setRaDec(*radec)
-        DRGB.setBoxArcMin(self.boxDeg*60)
-        DRGB.FitsToArray()
-        DRGB.Display(NamePNG="RGBOut.png",vmax=500)
-
+        self.OmegaTotal=None
 
     def setPhysCatalog(self,CatName):
         self.PhysCatName=CatName
@@ -93,17 +61,22 @@ class ClassCatalogMachine():
         self.PhotoCatName=CatName
         self.Cat=pyfits.open(CatName)[1].data
         self.Cat=self.Cat.view(np.recarray)
-
+        
         if self.PhysCat is not  None:
             print>>log,"  Append fields..."
             self.Cat=RecArrayOps.AppendField(self.Cat,("Mass",np.float32))
             self.Cat=RecArrayOps.AppendField(self.Cat,("SFR",np.float32))
+            self.Cat=RecArrayOps.AppendField(self.Cat,("z",np.float32))
+            self.Cat.Mass.fill(-1)
+            self.Cat.SFR.fill(-1)
+            self.Cat.z.fill(-1)
             dID=self.Cat.id[1::]-self.Cat.id[0:-1]
             if np.max(dID)!=1: stop
             print>>log,"  Append physical information to photometric catalog..."
-            self.Cat[self.PhysCat.ID].Mass[:]=self.PhysCat.Mass_best[:]
-            self.Cat[self.PhysCat.ID].SFR[:]=self.PhysCat.SFR_best[:]
-            
+            self.Cat.Mass[self.PhysCat.ID]=self.PhysCat.Mass_best[:]  
+            self.Cat.SFR[self.PhysCat.ID]=self.PhysCat.SFR_best[:]
+            self.Cat.z[self.PhysCat.ID]=self.PhysCat.z[:]
+          
         self.CatRange=np.arange(self.Cat.FLAG_CLEAN.size)
             
         print>>log,"Remove spurious objects..."
@@ -111,6 +84,7 @@ class ClassCatalogMachine():
                      (self.Cat.i_fluxerr > 0)&
                      (self.Cat.K_flux > 0)&
                      (self.Cat.ch2_swire_fluxerr > 0))[0]
+        
         # ind=np.where((self.Cat.FLAG_CLEAN == 1)&
         #              (self.Cat.i_fluxerr > 0)&
         #              #(self.Cat.K_flux > 0)&
@@ -140,26 +114,30 @@ class ClassCatalogMachine():
             self.CatRange=self.CatRange[FLAGMASK]
             print>>log, "  done ..."
 
-        
+
         self.DicoDATA["ID"]=np.int32(self.Cat.id[:])
         self.DicoDATA["RA"]=self.Cat.RA[:]
         self.DicoDATA["DEC"]=self.Cat.DEC[:]
         self.DicoDATA["K"]=self.Cat.K_flux[:]
-        self.DicoDATA["Mass"]=-1*np.ones((self.DicoDATA["ID"].size,),np.float32)
-        self.DicoDATA["SFR"]=-1*np.ones((self.DicoDATA["ID"].size,),np.float32)
+        self.DicoDATA["Mass"]=self.Cat.Mass[:]
+        self.DicoDATA["SFR"]=self.Cat.SFR[:]
+        self.DicoDATA["z"]=self.Cat.z[:]
         self.RA_orig,self.DEC_orig=self.DicoDATA["RA"].copy(),self.DicoDATA["DEC"].copy()
 
+        
     def PickleSave(self,FileName):
         print>>log, "Saving catalog as: %s"%FileName
         FileNames={"MaskFitsName":self.MaskFitsName,
                   "PhotoCatName":self.PhotoCatName,
                   "PhysCatName":self.PhysCatName}
         self.DicoDATA["FileNames"]=FileNames
+        self.DicoDATA["OmegaTotal"]=self.OmegaTotal
         MyPickle.DicoNPToFile(self.DicoDATA,FileName)
         
     def PickleLoad(self,FileName):
         print>>log, "Loading catalog from: %s"%FileName
         self.DicoData=MyPickle.FileToDicoNP(FileName)
+        self.OmegaTotal=self.DicoDATA["OmegaTotal"]
         self.setMask(self.DicoData["FileNames"]["MaskFitsName"])
     
     def RaDecToMaskPix(self,ra,dec):
@@ -185,31 +163,9 @@ class ClassCatalogMachine():
         f,p,_,_=self.MaskCasaImage.toworld([0,0,0,0])
         self.fp=f,p
         self.CDELT=abs(self.MaskFits.header["CDELT1"])
-
-    def giveFracMasked(self,ra,dec,R):
-        xc,yc=self.RaDecToMaskPix(ra,dec)
-        Rpix=int(R/self.CDELT)
-        ThisMask=self.MaskArray[0,0,xc-Rpix:xc+Rpix+1,yc-Rpix:yc+Rpix+1]
-        x,y=np.mgrid[-Rpix:Rpix+1,-Rpix:Rpix+1]
-        r=np.sqrt(x**2+y**2)
-        ThisMask[r>Rpix]=-1
-        UsedArea_pix=(np.where(ThisMask==0)[0]).size
-        Area_pix=(np.where(ThisMask!=-1)[0]).size
-        if Area_pix!=0:
-            frac=UsedArea_pix/float(Area_pix)
-        else:
-            frac=1.
-
-        if frac==0: frac=-1.
-        if frac<0.5: frac=-1
-        # pylab.clf()
-        # pylab.imshow(ThisMask,interpolation="nearest")
-        # pylab.draw()
-        # pylab.show(False)
-        # pylab.pause(0.1)
-        # stop
-        # print frac
-        return frac
+        if self.OmegaTotal is None:
+            NPixZero=self.MaskArray.size-np.count_nonzero(self.MaskArray)
+            self.OmegaTotal=NPixZero*(self.CDELT*np.pi/180)**2
 
         
     def setPz(self,PzFile):
@@ -220,29 +176,6 @@ class ClassCatalogMachine():
         
         
         H.close()
-
-    def SaveFITS(self,Name="Test.fits"):
-        G=self.DicoDATA["ngrid"]
-        GG=G.reshape((self.nch,self.NPix,self.NPix))
-        im=ClassSaveFITS.ClassSaveFITS(Name,
-                                       GG.shape,
-                                       self.CellDeg,
-                                       (self.rac,self.decc))#, Freqs=np.linspace(1400e6,1500e6,20))
-
-
-        Gd=np.zeros_like(G)
-        for ich in range(self.nch):
-            Gd[ich]=G[ich].T[:,::-1]
-        im.setdata(Gd.astype(np.float32))#,CorrT=True)
-        im.ToFits()
-        im.close()
-        DRGB=ClassDisplayRGB.ClassDisplayRGB()
-        DRGB.setRGB_FITS(*NamesRGB)
-        radec=[self.rac_deg,self.dec_deg]
-        DRGB.setRaDec(*radec)
-        DRGB.setBoxArcMin(self.boxDeg*60)
-        DRGB.loadFitsCube(Name,Sig=1)
-        DRGB.Display(NamePNG="%s.png"%Name,Scale="linear",vmin=5,vmax=30)
 
    
 def test(Show=True,NameOut="Test100kpc.fits"):

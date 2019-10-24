@@ -20,6 +20,7 @@ from DDFacet.Other.progressbar import ProgressBar
 from DDFacet.Other import AsyncProcessPool
 from DDFacet.Array import shared_dict
 import ClassCatalogMachine
+import ClassCatalogMachine2
 
 def g_z(z):
     a=4.
@@ -28,9 +29,6 @@ def g_z(z):
     g[ind]=1./z[ind]
     return g
 
-Cat="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_hpx_public.fits"
-Pz="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_public_pz.hdf"
-MaskImage="/data/tasse/DataDeepFields/EN1/optical_images/iband/EL_EN1_iband.fits.mask.fits"
 
 class ClassRunMCMC():
     def __init__(self):
@@ -70,7 +68,7 @@ class ClassRunMCMC():
         # #################################################################
 
         self.LoadData()
-        stop
+
         #self.XSimul
         #CSC.MassFunc.CGM.NParms
 
@@ -97,16 +95,27 @@ class ClassRunMCMC():
         
         self.finaliseInit()
         
-    def LoadData(self,Show=False):
-        CM=ClassCatalogMachine.ClassCatalogMachine(self.rac,self.decc,
-                                                   CellDeg=self.CellDeg,
-                                                   NPix=self.NPix,
-                                                   ScaleKpc=self.ScaleKpc)
-        if Show:
-            CM.showRGB()
-        CM.setMask(MaskImage)
-        CM.setCat(Cat)
-        CM.setPz(Pz)
+    def LoadData(self,Show=False,DicoDataNames=DicoDataNames_EN1,ForceLoad=False):
+        
+        # CM=ClassCatalogMachine.ClassCatalogMachine(self.rac,self.decc,
+        #                                            CellDeg=self.CellDeg,
+        #                                            NPix=self.NPix,
+        #                                            ScaleKpc=self.ScaleKpc)
+
+        CM=ClassCatalogMachine2.ClassCatalogMachine()
+
+        # if Show:
+        #     CM.showRGB()
+            
+        if os.path.isfile(DicoDataNames["PickleSave"]) and not ForceLoad:
+            CM.PickleLoad(DicoDataNames["PickleSave"])
+        else:
+            CM.setMask(DicoDataNames["MaskImage"])
+            CM.setPhysCatalog(DicoDataNames["PhysCat"])
+            CM.setCat(DicoDataNames["PhotoCat"])
+            CM.setPz(DicoDataNames["PzCat"])
+            CM.PickleSave(DicoDataNames["PickleSave"])
+            
         self.CM=CM
         # CM.SaveFITS(Name=NameOut)
 

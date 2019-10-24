@@ -2,14 +2,15 @@ import ClassGammaMachine
 from astropy.cosmology import WMAP9 as cosmo
 import numpy as np
 from DDFacet.Other import ClassTimeIt
+import pylab
 
 def testPhiM():
-
     z=np.linspace(0,3,10)
     M=np.linspace(8,12,100)
+    CMF=ClassMassFunction()
     pylab.clf()
     for iz in range(z.size):
-        Phi=givePhiM(z[iz],M)
+        Phi=CMF.givePhiM(z[iz],M)
         pylab.plot(M,np.log10(Phi))
         pylab.draw()
         pylab.show(False)
@@ -20,7 +21,7 @@ def testPhiM():
 
         
 class ClassMassFunction():
-    def __init__(self,Model="Leja"):
+    def __init__(self,Model="Leja19"):
         self.Model=Model
         self.CGM=None
 
@@ -42,38 +43,46 @@ class ClassMassFunction():
         if LX is not None: self.GammaCube=self.CGM.computeGammaCube(LX)
 
     def givePhiM(self,z,M):
-        if self.Mode=="Leja19":
+        if self.Model=="Leja19":
             return self.givePhiM_Leja19(z,M)
-        elif self.Mode=="Fontana06":
+        elif self.Model=="Fontana06":
             return self.givePhiM_Fontana06(z,M)
         
     def givePhiM_Leja19(self,z,M):
-
-        Phi1_c0= 2.44
-        Phi1_c1= 3.08
-        Phi1_c2= 4.14
-        Phi2_c0= 2.89
-        Phi2_c1= 3.29
-        Phi2_c2= 3.51
+        
+        Phi1_c0= -2.44
+        Phi1_c1= -3.08
+        Phi1_c2= -4.14
+        Phi2_c0= -2.89
+        Phi2_c1= -3.29
+        Phi2_c2= -3.51
         Ms_c0=10.79
         Ms_c1=10.88
         Ms_c2=10.84
-        Alpha1=0.28
-        Alpha2=1.48
+        Alpha1=-0.28
+        Alpha2=-1.48
+
+
+        def parameter_at_z0(y,z0,z1=0.2,z2=1.6,z3=3.0):
+            y1, y2, y3 = y
+            a = (((y3 - y1) + (y2 - y1) / (z2 - z1) * (z1 - z3)) /
+                 (z3**2 - z1**2 + (z2**2 - z1**2) / (z2 - z1) * (z1 - z3)))
+            b = ((y2 - y1) - a * (z2**2 - z1**2)) / (z2 - z1)
+            c = y1 - a * z1**2 - b * z1
+            return a * z0**2 + b * z0 + c
         
         Phi1_C=(Phi1_c0,Phi1_c1,Phi1_c2)
         Phi2_C=(Phi2_c0,Phi2_c1,Phi2_c2)
         Ms_C=(Ms_c0,Ms_c1,Ms_c2)
 
         def Phi(z,M,Phi_C,Ms_C,Alpha):
-            Phi_c0,Phi_c1,Phi_c2=Phi_C
-            Ms_c0,Ms_c1,Ms_c2=Ms_C
-            Phi_s=Phi_c0+Phi_c1*z+Phi_c2*z**2
-            M_s=Ms_c0+Ms_c1*z+Ms_c2*z**2
-            return np.log(10) * Phi_s * 10**((M-M_s)*(Alpha+1)) * np.exp(-10**(M-M_s))
+            Phi_s=10**(parameter_at_z0(Phi_C,z))
+            M_s=parameter_at_z0(Ms_C,z)
+            #return np.log(10) * Phi_s * 10**((M-M_s)*(Alpha+1)) * np.exp(-10**(M-M_s))
+            return Phi_s * np.log(10) * (10**(M-M_s))**(1+Alpha) * np.exp(-10**(M-M_s))
+        Phi1=Phi(z,M,Phi1_C,Ms_C,Alpha1)
+        Phi2=Phi(z,M,Phi2_C,Ms_C,Alpha2)
 
-        Phi1=Phi(z,M,Phi1_C,Ms1_C,Alpha1)
-        Phi2=Phi(z,M,Phi2_C,Ms2_C,Alpha2)
         return Phi1+Phi2
     
     def givePhiM_Fontana06(self,z,M):
