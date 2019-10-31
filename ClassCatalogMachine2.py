@@ -73,9 +73,10 @@ class ClassCatalogMachine():
             dID=self.Cat.id[1::]-self.Cat.id[0:-1]
             if np.max(dID)!=1: stop
             print>>log,"  Append physical information to photometric catalog..."
-            self.Cat.Mass[self.PhysCat.ID]=self.PhysCat.Mass_best[:]  
+            self.Cat.Mass[self.PhysCat.ID]=self.PhysCat.Mass_median[:]  
             self.Cat.SFR[self.PhysCat.ID]=self.PhysCat.SFR_best[:]
             self.Cat.z[self.PhysCat.ID]=self.PhysCat.z[:]
+            
           
         self.CatRange=np.arange(self.Cat.FLAG_CLEAN.size)
             
@@ -83,6 +84,7 @@ class ClassCatalogMachine():
         ind=np.where((self.Cat.FLAG_CLEAN == 1)&
                      (self.Cat.i_fluxerr > 0)&
                      (self.Cat.K_flux > 0)&
+                     (self.Cat.FLAG_OVERLAP==7)&
                      (self.Cat.ch2_swire_fluxerr > 0))[0]
         
         # ind=np.where((self.Cat.FLAG_CLEAN == 1)&
@@ -136,9 +138,9 @@ class ClassCatalogMachine():
         
     def PickleLoad(self,FileName):
         print>>log, "Loading catalog from: %s"%FileName
-        self.DicoData=MyPickle.FileToDicoNP(FileName)
+        self.DicoDATA=MyPickle.FileToDicoNP(FileName)
         self.OmegaTotal=self.DicoDATA["OmegaTotal"]
-        self.setMask(self.DicoData["FileNames"]["MaskFitsName"])
+        self.setMask(self.DicoDATA["FileNames"]["MaskFitsName"])
     
     def RaDecToMaskPix(self,ra,dec):
         if abs(ra)>2*np.pi: stop
@@ -152,7 +154,6 @@ class ClassCatalogMachine():
         xc,yc=self.RaDecToMaskPix(ra,dec)
         FLAG=self.MaskArray[0,0,xc,yc]
         return 1-FLAG
-    
     
     def setMask(self,MaskImage):
         print>>log,"Opening mask image: %s"%MaskImage
@@ -173,10 +174,8 @@ class ClassCatalogMachine():
         H=tables.open_file(PzFile)
         self.DicoDATA["zgrid_pz"]=H.root.zgrid[:]
         self.DicoDATA["pz"]=H.root.Pz[:][self.CatRange].copy()
-        
-        
         H.close()
-
+        
    
 def test(Show=True,NameOut="Test100kpc.fits"):
 

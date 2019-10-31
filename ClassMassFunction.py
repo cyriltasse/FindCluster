@@ -78,8 +78,8 @@ class ClassMassFunction():
         def Phi(z,M,Phi_C,Ms_C,Alpha):
             Phi_s=10**(parameter_at_z0(Phi_C,z))
             M_s=parameter_at_z0(Ms_C,z)
-            #return np.log(10) * Phi_s * 10**((M-M_s)*(Alpha+1)) * np.exp(-10**(M-M_s))
-            return Phi_s * np.log(10) * (10**(M-M_s))**(1+Alpha) * np.exp(-10**(M-M_s))
+            return np.log(10) * Phi_s * 10**((M-M_s)*(Alpha+1)) * np.exp(-10**(M-M_s))
+            #return Phi_s * np.log(10) * (10**(M-M_s))**(1+Alpha) * np.exp(-10**(M-M_s))
         Phi1=Phi(z,M,Phi1_C,Ms_C,Alpha1)
         Phi2=Phi(z,M,Phi2_C,Ms_C,Alpha2)
 
@@ -99,7 +99,7 @@ class ClassMassFunction():
         def M_s(z): return M0s+M1s*z+M2s*z**2
         def alpha_s(z): return alpha0s+alpha1s*z
         Phi=Phi_s(z) * np.log(10) * (10**(M-M_s(z)))**(1+alpha_s(z)) * np.exp(-10**(M-M_s(z)))
-        return Phi/H**3
+        return Phi#/H**3
 
     def give_N(self,(ra,dec),(z0,z1),(logM0,logM1),OmegaSr):
         # print ra,dec

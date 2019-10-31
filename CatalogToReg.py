@@ -40,8 +40,13 @@ def CatToReg(CatName=None,Type="GAIA",OutReg=None,Color="green"):
     elif Type=="LoTSS":        
         Cat=pyfits.open(CatName)[1].data
         Cat=Cat.view(np.recarray)
-        ind=np.where((Cat.FLAG_CLEAN == 1)&(Cat.i_fluxerr > 0)&
-                     (Cat.ch2_swire_fluxerr > 0)&(Cat.CLASS_STAR < 0.2))[0]
+        # ind=np.where((Cat.FLAG_CLEAN == 1)&(Cat.i_fluxerr > 0)&
+        #              (Cat.ch2_swire_fluxerr > 0)&(Cat.CLASS_STAR < 0.2))[0]
+        ind=np.where((Cat.FLAG_CLEAN == 1)&
+                     (Cat.i_fluxerr > 0)&
+                     (Cat.K_flux > 0)&
+                     (Cat.FLAG_OVERLAP==7)&
+                     (Cat.ch2_swire_fluxerr > 0))[0]
         Cat=Cat[ind]
         ra=Cat["RA"][:]*np.pi/180
         dec=Cat["DEC"][:]*np.pi/180 
