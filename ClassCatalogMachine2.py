@@ -53,7 +53,7 @@ class ClassCatalogMachine():
     def setPhysCatalog(self,CatName):
         self.PhysCatName=CatName
         print>>log,"Opening mass/sfr catalog fits file: %s"%CatName
-        self.PhysCat=pyfits.open(CatName)[1].data
+        self.PhysCat=fitsio.open(CatName)[1].data
         self.PhysCat=self.PhysCat.view(np.recarray)
 
     def setCat(self,CatName):
@@ -86,6 +86,15 @@ class ClassCatalogMachine():
                      (self.Cat.K_flux > 0)&
                      (self.Cat.FLAG_OVERLAP==7)&
                      (self.Cat.ch2_swire_fluxerr > 0))[0]
+        
+        ind=np.where((self.Cat.FLAG_CLEAN == 1)&
+                     (self.Cat.i_fluxerr > 0)&
+                     (self.Cat.K_flux > 0)&
+                     (self.Cat.Mass!=-1.)&
+                     (np.logical_not(np.isnan(self.Cat.Mass)))&
+                     (self.Cat.FLAG_OVERLAP==7)&
+                     (self.Cat.ch2_swire_fluxerr > 0))[0]
+        
         
         # ind=np.where((self.Cat.FLAG_CLEAN == 1)&
         #              (self.Cat.i_fluxerr > 0)&
