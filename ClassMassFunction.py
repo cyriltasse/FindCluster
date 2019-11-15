@@ -24,13 +24,18 @@ class ClassMassFunction():
     def __init__(self,Model="Leja19"):
         self.Model=Model
         self.CGM=None
-
-    def setGammaFunction(self,
-                         radec,
-                         CellDeg,
-                         NPix,
-                         z=[0.01,2.,40],
-                         ScaleKpc=500,LX=None):
+        self.GSF=None
+        
+    def setSelectionFunction(self,FileName):
+        self.GSF=ClassSelectionFunction.ClassSelectionFunction()
+        self.GSF.LoadSelectionFunction(FileName)
+        
+    def setGammaGrid(self,
+                     radec,
+                     CellDeg,
+                     NPix,
+                     z=[0.01,2.,40],
+                     ScaleKpc=500):
         Mode="ConvGaussNoise"
         Mode="ConvPaddedFFT"
         CGM=ClassGammaMachine.ClassGammaMachine(radec,
@@ -39,8 +44,8 @@ class ClassMassFunction():
                                                 z=z,ScaleKpc=ScaleKpc,
                                                 Mode=Mode)
 
-        self.CGM=CGM
-        if LX is not None: self.GammaCube=self.CGM.computeGammaCube(LX)
+        self.GammaMachine=CGM
+
 
     def givePhiM(self,z,M):
         if self.Model=="Leja19":
@@ -76,8 +81,8 @@ class ClassMassFunction():
         Ms_C=(Ms_c0,Ms_c1,Ms_c2)
 
         def Phi(z,M,Phi_C,Ms_C,Alpha):
-            Phi_s=10**(parameter_at_z0(Phi_C,z))
-            M_s=parameter_at_z0(Ms_C,z)
+            Phi_s = 10**(parameter_at_z0(Phi_C,z))
+            M_s   = parameter_at_z0(Ms_C,z)
             return np.log(10) * Phi_s * 10**((M-M_s)*(Alpha+1)) * np.exp(-10**(M-M_s))
             #return Phi_s * np.log(10) * (10**(M-M_s))**(1+Alpha) * np.exp(-10**(M-M_s))
         Phi1=Phi(z,M,Phi1_C,Ms_C,Alpha1)
@@ -110,15 +115,19 @@ class ClassMassFunction():
         V=dz*dV_dz*OmegaSr
         
         dlogM=logM1-logM0
-        Mm=(logM1+logM0)/2.
-        Phi=self.givePhiM(zm,Mm)
+        logMm=(logM1+logM0)/2.
+        Phi=self.givePhiM(zm,logMm)
 
         n0=Phi*dlogM*V
 
         n=n0
-        if self.CGM:
-            G=self.CGM.giveGamma(zm,ra,dec)
+        if self.GammaMachine:
+            G=self.GammaMachine.giveGamma(zm,ra,dec)
             n*=G
+
+        if self.GSF:
+            s=self.GSF.giveSelFunc(self,zm,logMm)
+            n*=s
             
         # print "  V=%f"%V
         # print "  G=%f"%G

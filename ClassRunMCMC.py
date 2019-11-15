@@ -73,10 +73,6 @@ class ClassRunMCMC():
         #CSC.MassFunc.CGM.NParms
 
         self.MassFuncLogProb=None
-
-
-        
-
         
         self.DistMachine=GeneDist.ClassDistMachine()
         z=np.linspace(-10,10,1000)
@@ -95,29 +91,6 @@ class ClassRunMCMC():
         
         self.finaliseInit()
         
-    def LoadData(self,Show=False,DicoDataNames=DicoDataNames_EN1,ForceLoad=False):
-        
-        # CM=ClassCatalogMachine.ClassCatalogMachine(self.rac,self.decc,
-        #                                            CellDeg=self.CellDeg,
-        #                                            NPix=self.NPix,
-        #                                            ScaleKpc=self.ScaleKpc)
-
-        CM=ClassCatalogMachine2.ClassCatalogMachine()
-
-        # if Show:
-        #     CM.showRGB()
-            
-        if os.path.isfile(DicoDataNames["PickleSave"]) and not ForceLoad:
-            CM.PickleLoad(DicoDataNames["PickleSave"])
-        else:
-            CM.setMask(DicoDataNames["MaskImage"])
-            CM.setPhysCatalog(DicoDataNames["PhysCat"])
-            CM.setCat(DicoDataNames["PhotoCat"])
-            CM.setPz(DicoDataNames["PzCat"])
-            CM.PickleSave(DicoDataNames["PickleSave"])
-            
-        self.CM=CM
-        # CM.SaveFITS(Name=NameOut)
 
     def reinitDicoChains(self,XInit=None):
         self.DicoChains = shared_dict.create("DicoChains")
@@ -167,58 +140,6 @@ class ClassRunMCMC():
     #     n=G*ni
     #     L=self.CellRad**2*(np.sum(GammaSlice))+np.sum(np.log(n))
     #     return L
-
-    def log_prob(self, x):
-        z0,z1=self.z0z1
-        X=self.Cat.x
-        Y=self.Cat.y
-        
-        ni=self.Cat.n_i
-        iz=self.Cat.iz
-        T=ClassTimeIt.ClassTimeIt()
-        T.disable()
-        # ######################################
-        # Init Mass Function for that one X
-        if self.MassFuncLogProb is None:
-            self.MassFuncLogProb=ClassMassFunction.ClassMassFunction()
-            T.timeit("MassFunc")
-            self.MassFuncLogProb.setGammaFunction((self.rac,self.decc),
-                                                  self.CellDeg,
-                                                  self.NPix,
-                                                  z=self.zParms,
-                                                  ScaleKpc=self.ScaleKpc)
-        MassFunc=self.MassFuncLogProb
-        T.timeit("SetGammaFunc")
-        LX=[x]
-        MassFunc.CGM.computeGammaCube(LX)
-        GammaSlice=MassFunc.CGM.GammaCube[0]
-        T.timeit("ComputeGammaFunc")
-        # ######################################
-
-        OmegaSr=((1./3600)*np.pi/180)**2
-        L=0
-        for iLogM in range(self.logM_g.size-1):
-            logM0,logM1=self.logM_g[iLogM],self.logM_g[iLogM+1]
-            logMm=(logM0+logM1)/2.
-            zm=(z0+z1)/2.
-            dz=z1-z0
-            dlogM=logM1-logM0
-            dV_dz=cosmo.differential_comoving_volume(zm).to_value()
-            T.timeit("Cosmo")
-            V=dz*dV_dz*self.CellRad**2
-            
-            n0=MassFunc.givePhiM(zm,logMm)*dlogM*V
-            T.timeit("n0")
-            L+=-np.sum(GammaSlice)*n0
-            for iS in range(self.Cat.ra.size):
-                n=MassFunc.give_N((self.Cat.ra[iS],self.Cat.dec[iS]),
-                                  (z0,z1),
-                                  (logM0,logM1),
-                                  OmegaSr)
-                L+=np.log(n)
-                #L+=np.log(OmegaSr)
-            T.timeit("log(n)")
-        return L
 
     # ##########################################################
     # Global Minima solver

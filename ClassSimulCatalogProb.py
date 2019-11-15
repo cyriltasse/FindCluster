@@ -27,22 +27,6 @@ import scipy.signal
 import ClassMassFunction
 
 
-def givePhiM(z,M):
-    M0s= 11.16
-    M1s= +0.17
-    M2s= -0.07
-    alpha0s= -1.18
-    alpha1s= -0.082
-    Phi0s= 0.0035
-    Phi1s= -2.20
-    H=0.7
-    # From Fontana et al. 06
-    def Phi_s(z): return Phi0s*(1+z)**Phi1s
-    def M_s(z): return M0s+M1s*z+M2s*z**2
-    def alpha_s(z): return alpha0s+alpha1s*z
-    Phi=Phi_s(z) * np.log(10) * (10**(M-M_s(z)))**(1+alpha_s(z)) * np.exp(-10**(M-M_s(z)))
-    return Phi/H**3
-
 
 class ClassSimulCatalog():
     def __init__(self,
@@ -65,11 +49,12 @@ class ClassSimulCatalog():
         
         self.MassFunc=ClassMassFunction.ClassMassFunction()
 
-        self.MassFunc.setGammaFunction((self.rac,self.decc),
-                                       CellDeg,
-                                       NPix,
-                                       z=z,
-                                       ScaleKpc=ScaleKpc)
+        self.MassFunc.setGammaGrid((self.rac,self.decc),
+                                   CellDeg,
+                                   NPix,
+                                   z=z,
+                                   ScaleKpc=ScaleKpc)
+        
 
         self.rag=self.MassFunc.CGM.rag
         self.decg=self.MassFunc.CGM.decg
@@ -97,12 +82,12 @@ class ClassSimulCatalog():
             z0,z1=self.zg[iz],self.zg[iz+1]
             zm=(self.zg[iz]+self.zg[iz+1])/2.
             dz=self.zg[iz+1]-self.zg[iz]
+            
             # dV_dz=cosmo.differential_comoving_volume(zm).to_value()
             # V=self.CellRad**2*dz*dV_dz
             # V2=self.CellRad**2/(4.*np.pi)*(cosmo.comoving_volume(z1).to_value()-cosmo.comoving_volume(z0).to_value())
             # stop
-            # # ras=np.sort(self.rag.flatten())
-
+            
             decs=np.sort(self.decg.flatten())
             ras=self.rag.T.flatten()
             decs=self.decg.flatten()
