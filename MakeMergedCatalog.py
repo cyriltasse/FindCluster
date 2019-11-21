@@ -30,6 +30,7 @@ import os
 # # ##############################
 import FieldsToFiles
 import ClassProbDensityMachine
+import ClassSelectionFunction
 
 def AngDist(ra0,dec0,ra1,dec1):
     AC=np.arccos
@@ -52,7 +53,9 @@ class ClassCatalogMachine():
         self.OmegaTotal=None
         self.zg_Pars=zg_Pars
         self.logM_Pars=logM_Pars
-
+        self.DicoDATA["logM_Pars"]=self.logM_Pars
+        self.DicoDATA["zg_Pars"]=self.zg_Pars
+        
     def Init(self,Show=False,FieldName="EN1",ForceLoad=False):
         if FieldName=="EN1":
             DicoDataNames=FieldsToFiles.DicoDataNames_EN1
@@ -64,14 +67,23 @@ class ClassCatalogMachine():
             self.setPhysCatalog(DicoDataNames["PhysCat"])
             self.setPz(DicoDataNames["PzCat"])
             self.setCat(DicoDataNames["PhotoCat"])
+            self.ComputeSelFunc()
             self.ComputePzm()
             self.PickleSave(DicoDataNames["PickleSave"])
+
+    def ComputeSelFunc(self):
+        print>>log,"Computig selection function..."
+        CSF=ClassSelectionFunction.ClassSelectionFunction(self)
+        CSF.ComputeMassFunction()
+        CSF.PlotSelectionFunction()
+        self.DicoDATA["DicoSelFunc"]=CSF.DicoSelFunc
 
 
     def ComputePzm(self):
         PDM=ClassProbDensityMachine.ClassProbDensityMachine(self,zg_Pars=self.zg_Pars,logM_Pars=self.logM_Pars)
         PDM.computePDF_All()
-    
+
+        
     def setPz(self,PzFile):
         print>>log,"Opening p-z hdf5 file: %s"%PzFile
         H=tables.open_file(PzFile)
@@ -153,7 +165,7 @@ class ClassCatalogMachine():
         ind=np.where((self.Cat.FLAG_CLEAN == 1)&
                      (self.Cat.i_fluxerr > 0)&
                      (self.Cat.K_flux > 0)&
-                     #(self.Cat.Mass!=-1.)&
+                     (np.logical_not(np.isnan(self.Cat.Mass_best)))&
                      #(np.logical_not(np.isnan(self.Cat.Mass)))&
                      (self.Cat.FLAG_OVERLAP==7)&
                      (self.Cat.ch2_swire_fluxerr > 0))[0]
@@ -280,13 +292,16 @@ def test(Show=True,NameOut="Test100kpc.fits"):
     COM.killWorkers()
     COM.SaveFITS(Name=NameOut)
 
-if __name__=="__main__":
-    try:
-        test()
-    except Exception,e:
-        print>>log, "Got an exception... : %s"%str(e)    
-        print>>log, "killing workers..."
-        APP.terminate()
-        APP.shutdown()
-        Multiprocessing.cleanupShm()
+# if __name__=="__main__":
+#     try:
+#         test()
+#     except Exception,e:
+#         print>>log, "Got an exception... : %s"%str(e)    
+#         print>>log, "killing workers..."
+#         APP.terminate()
+#         APP.shutdown()
+#         Multiprocessing.cleanupShm()
       
+if __name__=="__main__":
+    CM=ClassCatalogMachine()
+    CM.Init(ForceLoad=True)

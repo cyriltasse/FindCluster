@@ -1,11 +1,11 @@
 import numpy as np
-import ClassCatalogMachine2
 import pylab
 from scipy import ndimage
 from DDFacet.Other import logger
 log = logger.getLogger("ClassProbDensityMachine")
 
 def test():
+    import ClassCatalogMachine2
     CM=ClassCatalogMachine2.ClassCatalogMachine()
     CM.Init()
     PDM=ClassProbDensityMachine(CM)

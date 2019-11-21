@@ -2,7 +2,7 @@
 import numpy as np
 from astropy.cosmology import WMAP9 as cosmo
 import FieldsToFiles
-import ClassCatalogMachine2
+import MakeMergedCatalog
 import ClassMassFunction
 import os
 from DDFacet.Other import MyPickle
@@ -18,57 +18,35 @@ log = logger.getLogger("ClassSelectionFunction")
 # # ##############################
 
 def test():
-    GSF=ClassSelectionFunction()
-    GSF.LoadData()
+    CM=MakeMergedCatalog.ClassCatalogMachine()
+    CM.Init()
+    GSF=ClassSelectionFunction(CM)
     GSF.ComputeMassFunction()
     GSF.PlotSelectionFunction()
     
     
 class ClassSelectionFunction():
-    def __init__(self,z=[0.01,1.5,10],logMParms=[8.,12.5,20]):
-        self.zg=np.linspace(*z)
-        self.logM_g=np.linspace(*logMParms)
-        self.ModelMassFunc=ClassMassFunction.ClassMassFunction()
-        
-    def LoadData(self,Show=False,
-                 DicoDataNames=FieldsToFiles.DicoDataNames_EN1,
-                 ForceLoad=0):
-        
-        # CM=ClassCatalogMachine.ClassCatalogMachine(self.rac,self.decc,
-        #                                            CellDeg=self.CellDeg,
-        #                                            NPix=self.NPix,
-        #                                            ScaleKpc=self.ScaleKpc)
-
-        CM=ClassCatalogMachine2.ClassCatalogMachine()
-        
-        # if Show:
-        #     CM.showRGB()
-            
-        if os.path.isfile(DicoDataNames["PickleSave"]) and not ForceLoad:
-            CM.PickleLoad(DicoDataNames["PickleSave"])
-        else:
-            CM.setMask(DicoDataNames["MaskImage"])
-            CM.setPhysCatalog(DicoDataNames["PhysCat"])
-            CM.setCat(DicoDataNames["PhotoCat"])
-            CM.setPz(DicoDataNames["PzCat"])
-            CM.PickleSave(DicoDataNames["PickleSave"])
+    def __init__(self,CM):
         self.CM=CM
-        
+        self.zg=np.linspace(*self.CM.zg_Pars)
+        self.logM_g=np.linspace(*self.CM.logM_Pars)
+        self.ModelMassFunc=ClassMassFunction.ClassMassFunction()
+
     def ComputeMassFunction(self):
-        Z=self.CM.DicoDATA["z"]
-        logM=self.CM.DicoDATA["Mass"]
+        Z=self.CM.Cat.z
+        logM=self.CM.Cat.Mass_best
         OmegaSr=self.CM.OmegaTotal
         Phi=np.zeros((self.zg.size-1,self.logM_g.size-1),np.float32)
         Selfunc=np.zeros((self.zg.size-1,self.logM_g.size-1),np.float32)
         CMF=ClassMassFunction.ClassMassFunction()
+
         for izbin in range(self.zg.size-1):
             z0,z1=self.zg[izbin],self.zg[izbin+1]
             zm=(z0+z1)/2.
             dz=z1-z0
             dV_dz=cosmo.differential_comoving_volume(zm).to_value()
-            
             V=dz*dV_dz*OmegaSr
-            
+
             for iMbin in range(self.logM_g.size-1):
                 logM0,logM1=self.logM_g[iMbin],self.logM_g[iMbin+1]
                 C0=((Z>z0)&(Z<z1))
@@ -85,12 +63,14 @@ class ClassSelectionFunction():
         self.PhiMeasured=Phi
         self.Selfunc=Selfunc
 
-        DicoSelFunc={"logM_g":self.logM_g,
-                     "zg":self.zg,
-                     "SelFunc":Selfunc}
-        FileName="%s.SelFunc.Dico"%self.CM.DicoDATA["FileNames"]['PhysCatName']
-        print>>log,"Saving selection function as: %s"%FileName
-        MyPickle.DicoNPToFile(DicoSelFunc,FileName)
+        self.DicoSelFunc={"logM_g":self.logM_g,
+                          "zg":self.zg,
+                          "SelFunc":Selfunc}
+
+        
+        # FileName="%s.SelFunc.Dico"%self.CM.DicoDATA["FileNames"]['PhysCatName']
+        # print>>log,"Saving selection function as: %s"%FileName
+        # MyPickle.DicoNPToFile(self.DicoSelFunc,FileName)
 
     def LoadSelectionFunction(self,FileName):
         print>>log,"Loading selection function: %s"%FileName
@@ -121,14 +101,14 @@ class ClassSelectionFunction():
             # CMF=ClassMassFunction.ClassMassFunction(Model="Fontana06")
             # Phi_model2=CMF.givePhiM(zm,logMm)
             pylab.subplot(3,3,izbin+1)
-            # pylab.scatter(logMm,np.log10(Phi[izbin]))
-            # pylab.plot(logMm,np.log10(Phi_model),color="black",ls="--")
+            pylab.scatter(logMm,np.log10(Phi[izbin]))
+            pylab.plot(logMm,np.log10(Phi_model),color="black",ls="--")
+            # # #pylab.plot(logMm,np.log10(Phi_model2),color="black",ls=":")
+            # pylab.scatter(logMm,self.Selfunc[izbin])
+            # MM=np.linspace(logMm[0],logMm[-1],100)
+            # s=self.giveSelFunc(zm,MM)
+            # pylab.scatter(MM,s,color="red")
             # #pylab.plot(logMm,np.log10(Phi_model2),color="black",ls=":")
-            pylab.scatter(logMm,self.Selfunc[izbin])
-            MM=np.linspace(logMm[0],logMm[-1],100)
-            s=self.giveSelFunc(zm,MM)
-            pylab.scatter(MM,s,color="red")
-            #pylab.plot(logMm,np.log10(Phi_model2),color="black",ls=":")
             pylab.title("%.2f < Z < %.2f"%(z0,z1))
             pylab.grid()
         pylab.tight_layout()
