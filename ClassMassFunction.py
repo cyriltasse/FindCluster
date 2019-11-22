@@ -3,6 +3,7 @@ from astropy.cosmology import WMAP9 as cosmo
 import numpy as np
 from DDFacet.Other import ClassTimeIt
 import pylab
+import ClassSelectionFunction
 
 def testPhiM():
     z=np.linspace(0,3,10)
@@ -26,22 +27,23 @@ class ClassMassFunction():
         self.CGM=None
         self.GSF=None
         
-    def setSelectionFunction(self,FileName):
-        self.GSF=ClassSelectionFunction.ClassSelectionFunction()
-        self.GSF.LoadSelectionFunction(FileName)
+    def setSelectionFunction(self,CM):
+        self.GSF=ClassSelectionFunction.ClassSelectionFunction(CM)
+
         
     def setGammaGrid(self,
                      radec,
                      CellDeg,
                      NPix,
-                     z=[0.01,2.,40],
+                     z0z1,
                      ScaleKpc=500):
         Mode="ConvGaussNoise"
         Mode="ConvPaddedFFT"
         CGM=ClassGammaMachine.ClassGammaMachine(radec,
                                                 CellDeg,
                                                 NPix,
-                                                z=z,ScaleKpc=ScaleKpc,
+                                                z0z1=z0z1,
+                                                ScaleKpc=ScaleKpc,
                                                 Mode=Mode)
 
         self.GammaMachine=CGM

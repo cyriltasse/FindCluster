@@ -11,7 +11,9 @@ class ClassGammaMachine():
                  radec,
                  CellDeg,
                  NPix,
-                 z=[0.01,2.,40],Mode="ConvGaussNoise",ScaleKpc=100):
+                 z=[0.01,2.,40],
+                 Mode="ConvGaussNoise",
+                 ScaleKpc=100):
         self.radec=radec
         self.rac,self.decc=self.radec
         self.CellDeg=CellDeg
@@ -35,6 +37,8 @@ class ClassGammaMachine():
             self.NParms=self.NPix**2
         elif self.Mode=="ConvPaddedFFT":
             self.SliceFunction=self.giveSlice_ConvPaddedFFT
+            self.L_NParms=[]
+            self.L_fScalePix=[]
             for iz in range(self.zg.size-1):
                 z0,z1=self.zg[iz],self.zg[iz+1]
                 zm=(z0+z1)/2.
@@ -47,8 +51,10 @@ class ClassGammaMachine():
                 if fScalePix%2==0: fScalePix+=1
                 fScalePix=7
                 N=fScalePix
-                self.fScalePix=fScalePix
-                self.NParms=(N//2*N+N//2)*2+1
+                self.L_fScalePix.append(fScalePix)
+                NParms=(N//2*N+N//2)*2+1
+                self.L_NParms.append(NParms)
+            self.NParms=np.sum(self.L_NParms)
 
 
     def giveGamma(self,z,ra,dec):

@@ -30,6 +30,10 @@ class ClassSelectionFunction():
         self.CM=CM
         self.zg=np.linspace(*self.CM.zg_Pars)
         self.logM_g=np.linspace(*self.CM.logM_Pars)
+        if "DicoSelFunc" in CM.DicoDATA.keys():
+            print>>log,"Getting precomputed selection function..."
+            self.DicoSelFunc=CM.DicoDATA["DicoSelFunc"]
+            
         self.ModelMassFunc=ClassMassFunction.ClassMassFunction()
 
     def ComputeMassFunction(self):
@@ -72,9 +76,12 @@ class ClassSelectionFunction():
         # print>>log,"Saving selection function as: %s"%FileName
         # MyPickle.DicoNPToFile(self.DicoSelFunc,FileName)
 
-    def LoadSelectionFunction(self,FileName):
-        print>>log,"Loading selection function: %s"%FileName
-        self.DicoSelFunc=MyPickle.FileToDicoNP(FileName)
+    def setSelectionFunction(self,FileName=None,DicoSelFunc=None):
+        if FileName is not None:
+            print>>log,"Loading selection function: %s"%FileName
+            self.DicoSelFunc=MyPickle.FileToDicoNP(FileName)
+        elif Dico is not None:
+            self.DicoSelFunc=DicoSelFunc
         self.logM_g=self.DicoSelFunc["logM_g"]
         self.zg=self.DicoSelFunc["zg"]
         self.Selfunc=self.DicoSelFunc["SelFunc"]
