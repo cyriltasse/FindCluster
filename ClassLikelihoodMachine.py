@@ -7,16 +7,18 @@ def test():
     CM.Init()
     CLM=ClassLikelihoodMachine(CM)
     X=np.random.randn(CLM.MassFunction.GammaMachine.NParms)
+    CLM.MassFunction.updateGammaCube(X)
+    CLM.MassFunction.GammaMachine.PlotGammaCube()
     stop
 
 class ClassLikelihoodMachine():
     def __init__(self,CM):
         self.CM=CM
         rac,decc=241.20678,55.59485 # cluster
-        self.CellDeg=0.001
+        self.CellDeg=0.001/7.
         self.CellRad=self.CellDeg*np.pi/180
-        self.NPix=101
-        self.ScaleKpc=500
+        self.NPix=101*7
+        self.ScaleKpc=100
         self.rac_deg,self.decc_deg=rac,decc
         self.rac,self.decc=rac*np.pi/180,decc*np.pi/180
         self.zParms=self.CM.zg_Pars
@@ -26,13 +28,9 @@ class ClassLikelihoodMachine():
         self.MassFunction.setGammaGrid((self.rac,self.decc),
                                        self.CellDeg,
                                        self.NPix,
-                                       z=self.zParms,
+                                       zParms=self.zParms,
                                        ScaleKpc=self.ScaleKpc)
         self.MassFunction.setSelectionFunction(self.CM)
-        
-        xs
-        
-        
         
     def log_prob(self, x, iz):
         z0,z1=self.z0z1

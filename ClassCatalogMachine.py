@@ -84,7 +84,7 @@ class ClassCatalogMachine():
     def ComputePzm(self):
         PDM=ClassProbDensityMachine.ClassProbDensityMachine(self,zg_Pars=self.zg_Pars,logM_Pars=self.logM_Pars)
         PDM.computePDF_All()
-
+        
         
     def setPz(self,PzFile):
         print>>log,"Opening p-z hdf5 file: %s"%PzFile
@@ -114,6 +114,7 @@ class ClassCatalogMachine():
                 nr,nz=self.DicoDATA["pz"].shape
                 FIELDS+=[("pz",self.DicoDATA["pz"].dtype,(nz,))]
                 FIELDS+=[("Pzm",np.float32,(self.zg_Pars[-1]-1,self.logM_Pars[-1]-1))]
+                FIELDS+=[("Nz",np.float32,(self.zg_Pars[-1]-1,))]
             FIELDS+=[("l",np.float32),("m",np.float32)]
             PhotoCat=np.zeros((self.PhotoCat.shape[0],),dtype=FIELDS)
             print>>log,"  Copy photo fields ..."

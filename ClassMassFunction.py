@@ -35,20 +35,23 @@ class ClassMassFunction():
                      radec,
                      CellDeg,
                      NPix,
-                     z0z1,
+                     zParms=None,
                      ScaleKpc=500):
         Mode="ConvGaussNoise"
         Mode="ConvPaddedFFT"
         CGM=ClassGammaMachine.ClassGammaMachine(radec,
                                                 CellDeg,
                                                 NPix,
-                                                z0z1=z0z1,
+                                                zParms=zParms,
                                                 ScaleKpc=ScaleKpc,
                                                 Mode=Mode)
 
         self.GammaMachine=CGM
 
+    def updateGammaCube(self,X):
+        self.GammaMachine.computeGammaCube(X)
 
+        
     def givePhiM(self,z,M):
         if self.Model=="Leja19":
             return self.givePhiM_Leja19(z,M)

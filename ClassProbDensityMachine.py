@@ -83,7 +83,12 @@ class ClassProbDensityMachine():
                 indkeep[ID]=1
         print>>log,"  have kept %.4f%% of objects (others have bad fit?)"%(100*float(np.count_nonzero(indkeep))/indkeep.size)
         self.CM.Cat=self.CM.Cat[indkeep]
-                
+
+        print>>log,"Compute nz..."
+        nz=self.CM.DicoDATA["DicoSelFunc"]["NObsPerSr"]
+        for ID in range(self.CM.Cat.shape[0]):
+            self.CM.Cat.Nz[ID][:]=np.sum(self.CM.Cat.Pzm[ID]*nz,axis=1)
+            
             
     def computePDF_ID(self,ID):
         if self.CM.Cat.chi_best[ID]==0. or np.isnan(self.CM.Cat.chi_best[ID]): return 0.

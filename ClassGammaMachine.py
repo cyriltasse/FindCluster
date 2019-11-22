@@ -11,7 +11,7 @@ class ClassGammaMachine():
                  radec,
                  CellDeg,
                  NPix,
-                 z=[0.01,2.,40],
+                 zParms=[0.01,2.,40],
                  Mode="ConvGaussNoise",
                  ScaleKpc=100):
         self.radec=radec
@@ -19,7 +19,7 @@ class ClassGammaMachine():
         self.CellDeg=CellDeg
         self.NPix=NPix
         self.CellRad=CellDeg*np.pi/180
-        self.zg=np.linspace(*z)
+        self.zg=np.linspace(*zParms)
         self.Mode=Mode
         self.ScaleKpc=ScaleKpc
         
@@ -31,6 +31,7 @@ class ClassGammaMachine():
         self.decg=decg.reshape(lg.shape)
         self.lg,self.mg=lg,mg
         self.GammaCube=None
+        self.NSlice=self.zg.size-1
         
         if self.Mode=="ConvGaussNoise":
             self.SliceFunction=self.giveSlice_ConvGaussNoise
@@ -49,14 +50,24 @@ class ClassGammaMachine():
                 fPix=freq[1]-freq[0]
                 fScalePix=int(fScaleRad/fPix)
                 if fScalePix%2==0: fScalePix+=1
-                fScalePix=7
+                #fScalePix=7
                 N=fScalePix
                 self.L_fScalePix.append(fScalePix)
                 NParms=(N//2*N+N//2)*2+1
                 self.L_NParms.append(NParms)
+                print zm,NParms
             self.NParms=np.sum(self.L_NParms)
 
-
+    def PlotGammaCube(self):
+        import pylab
+        pylab.clf()
+        for iPlot in range(9):
+            pylab.subplot(3,3,iPlot+1)
+            pylab.imshow(self.GammaCube[iPlot],interpolation="nearest")
+            pylab.draw()
+            pylab.show(False)
+            pylab.pause(0.1)
+            
     def giveGamma(self,z,ra,dec):
         
         if self.GammaCube is None:
@@ -78,7 +89,7 @@ class ClassGammaMachine():
         ind=x*ny+y
         return self.GammaCube[iz].flat[ind]
 
-    def giveSlice_ConvPaddedFFT(self,x,z0,z1):
+    def giveSlice_ConvPaddedFFT(self,LX,iSlice):
         
         # zm=(z0+z1)/2.
         # ScalePix=self.ScaleKpc*cosmo.arcsec_per_kpc_comoving(zm).to_value()/(self.CellDeg*3600.)
@@ -88,22 +99,27 @@ class ClassGammaMachine():
         # dd=np.sqrt(xx**2+yy**2)
         # G=np.exp(-dd**2/(2.*ScalePix**2))
         # R=x.reshape((self.NPix,self.NPix))
+
+        x=LX[iSlice]
+        z0=self.zg[iSlice]
+        z1=self.zg[iSlice+1]
+        fScalePix=self.L_fScalePix[iSlice]
         
         F0=np.zeros((self.NPix,self.NPix),np.complex64)
         xc=self.NPix//2
-        Sup=self.fScalePix//2
+        Sup=fScalePix//2
         F=F0[xc-Sup:xc+Sup+1,xc-Sup:xc+Sup+1]
         xc0=Sup
         F[xc0,xc0]=x[0]
         xr=x[1:x.size//2+1]
         xi=x[x.size//2+1:]
-        xr0=xr[0:self.fScalePix//2]
-        xr1=xr[self.fScalePix//2:]
-        xi0=xr[0:self.fScalePix//2]
-        xi1=xr[self.fScalePix//2:]
+        xr0=xr[0:fScalePix//2]
+        xr1=xr[fScalePix//2:]
+        xi0=xr[0:fScalePix//2]
+        xi1=xr[fScalePix//2:]
         F[xc0+1:,xc0]=xr0+xi0*1j
         F[:xc0,xc0][::-1]=xr0-xi0*1j
-        F[:,xc0+1:]=(xr1+1j*xi1).reshape((self.fScalePix,self.fScalePix//2))
+        F[:,xc0+1:]=(xr1+1j*xi1).reshape((fScalePix,fScalePix//2))
         F[:,:xc0]=F[:,xc0+1:][::-1,::-1].conj()
         
         #Slice=scipy.signal.fftconvolve(R, G, mode="same")
@@ -137,12 +153,16 @@ class ClassGammaMachine():
 
     
 
-    def computeGammaCube(self,LX):
-        if type(LX) is not list: stop
+    def computeGammaCube(self,X):
+        LX=[]
+        ii=0
+        for iSlice in range(self.NSlice):
+            LX.append(X[ii:ii+self.L_NParms[iSlice]])
+            ii+=self.L_NParms[iSlice]
         GammaCube=np.zeros((self.zg.size-1,self.NPix,self.NPix),np.float32)
         for iz in range(self.zg.size-1):
             z0,z1=self.zg[iz],self.zg[iz+1]
-            GammaCube[iz,:,:]=self.SliceFunction(LX[iz],z0,z1)
+            GammaCube[iz,:,:]=self.SliceFunction(LX,iz)
         self.GammaCube=GammaCube
 
             
