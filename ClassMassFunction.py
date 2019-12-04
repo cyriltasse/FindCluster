@@ -25,10 +25,10 @@ class ClassMassFunction():
     def __init__(self,Model="Leja19"):
         self.Model=Model
         self.CGM=None
-        self.GSF=None
+        self.CSF=None
         
     def setSelectionFunction(self,CM):
-        self.GSF=ClassSelectionFunction.ClassSelectionFunction(CM)
+        self.CSF=ClassSelectionFunction.ClassSelectionFunction(CM)
 
         
     def setGammaGrid(self,
@@ -130,8 +130,8 @@ class ClassMassFunction():
             G=self.GammaMachine.giveGamma(zm,ra,dec)
             n*=G
 
-        if self.GSF:
-            s=self.GSF.giveSelFunc(self,zm,logMm)
+        if self.CSF:
+            s=self.CSF.giveSelFunc(self,zm,logMm)
             n*=s
             
         # print "  V=%f"%V

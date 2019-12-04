@@ -6,6 +6,8 @@ import img_scale
 from DDFacet.Other import logger
 log = logger.getLogger("ClassDisplayRGB")
 from astropy.io import fits as pyfits
+from astropy.wcs import WCS
+from DDFacet.ToolsDir import ModCoord
 
 import ntpath
 def path_leaf(path):
@@ -52,7 +54,9 @@ class ClassDisplayRGB():
     def FitsToArray(self):
         self.CutNames=["/tmp/%s.cut.fits"%path_leaf(ThisName) for ThisName in self.Names]
         self.ListImage=[]
+        self.LWCS=[]
         for InFile,OutFile in zip(self.Names,self.CutNames):
+            
             self.ListImage.append(CutImage.CutFits(InFile=InFile,
                                                    OutFile=OutFile,
                                                    Ra=self.ra,
@@ -60,12 +64,28 @@ class ClassDisplayRGB():
                                                    boxArcMin=self.boxArcMin,
                                                    Overwrite=True,
                                                    dPix=1))
+            hdu = pyfits.open(OutFile)[0]
+            wcs=WCS(hdu.header)
+            self.LWCS.append(wcs)
+
         R,G,B=self.ListImage
         img = np.zeros((R.shape[0], R.shape[1], 3), dtype=float)
         img[:,:,0]=R[:,:]
         img[:,:,1]=G[:,:]
         img[:,:,2]=B[:,:]
         self.img=img[::-1,:]
+
+        Image=self.CutNames[0]
+        Fits=pyfits.open(Image)[0]
+        
+        if "CDELT1" in Fits.header.keys():
+            self.CDELT=abs(Fits.header["CDELT1"])
+        else:
+            self.CDELT=abs(Fits.header["CD1_1"])
+            
+        self.rac=Fits.header["CRVAL1"]*np.pi/180
+        self.decc=Fits.header["CRVAL2"]*np.pi/180
+        
         
     def Display(self,
                 Scale="sqrt",
@@ -88,7 +108,24 @@ class ClassDisplayRGB():
 
         fig=pylab.figure("RGB Composite",figsize=(10,10))
         pylab.clf()
-        pylab.imshow(img, aspect='equal',extent=[self.ra-self.boxArcMin/2/60.,self.ra+self.boxArcMin/2/60.,self.dec-self.boxArcMin/2/60.,self.dec+self.boxArcMin/2/60.])
+
+        nx=img.shape[0]
+        d=(nx//2+0.5)*self.CDELT
+        wcs=self.LWCS[0]
+        ra0,dec0=wcs.all_pix2world([0],[0],1)
+        ra1,dec1=wcs.all_pix2world([nx-1],[nx-1],1)
+
+        CoordMachine = ModCoord.ClassCoordConv(self.rac, self.decc)
+        l0,m0=CoordMachine.radec2lm(ra0*np.pi/180,dec0*np.pi/180)
+        l1,m1=CoordMachine.radec2lm(ra1*np.pi/180,dec1*np.pi/180)
+        
+        # l0=self.rac_cut-d
+        # l1=self.rac_cut+d
+        # m0=self.decc_cut-d
+        # m1=self.decc_cut+d
+        pylab.imshow(img,
+                     aspect='equal',
+                     extent=[l0[0],l1[0],m0[0],m1[0]])
         pylab.draw()
         if NamePNG:
             print>>log,"Saving image as: %s"%NamePNG
@@ -104,14 +141,14 @@ def test():
            "/data/tasse/DataDeepFields/EN1/optical_images/Kband/EL_EN1_Kband.fits",
            "/data/tasse/DataDeepFields/EN1/optical_images/iband/EL_EN1_iband.fits"]
     DRGB=ClassDisplayRGB()
-    #DRGB.setRGB_FITS(*Names)
+    DRGB.setRGB_FITS(*Names)
 
     radec=[241.51386,55.424]
     DRGB.setRaDec(*radec)
     DRGB.setBoxArcMin(20.)
-    #DRGB.FitsToArray()
-    F=pyfits.open("Test100kpc.fits")[0].data
-    DRGB.setCube(F,Sig=1)
+    DRGB.FitsToArray()
+    #F=pyfits.open("Test100kpc.fits")[0].data
+    #DRGB.setCube(F,Sig=1)
     DRGB.Display(Scale="linear",vmin=3,vmax=30)
 
     

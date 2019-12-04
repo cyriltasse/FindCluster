@@ -75,7 +75,7 @@ class ClassProbDensityMachine():
     def computePDF_All(self):
         print>>log,"Compute rebined p(z,m)..."
         
-        indkeep=np.zeros((self.CM.Cat.shape[0],),dtype=np.int32)
+        indkeep=np.zeros((self.CM.Cat.shape[0],),dtype=np.bool8)
         for ID in range(self.CM.Cat.shape[0]):
             #print float(ID)/self.CM.Cat.shape[0]
             self.CM.Cat.Pzm[ID][:,:]=self.computePDF_ID(ID)
@@ -83,12 +83,13 @@ class ClassProbDensityMachine():
                 indkeep[ID]=1
         print>>log,"  have kept %.4f%% of objects (others have bad fit?)"%(100*float(np.count_nonzero(indkeep))/indkeep.size)
         self.CM.Cat=self.CM.Cat[indkeep]
-
-        print>>log,"Compute nz..."
-        nz=self.CM.DicoDATA["DicoSelFunc"]["NObsPerSr"]
+        print np.max(np.max(self.CM.Cat.Pzm,axis=-1),axis=-1)
+        self.indkeep=indkeep
+        print>>log,"Compute n_zt..."
+        n_zm=self.CM.DicoDATA["DicoSelFunc"]["n_zm"]
         for ID in range(self.CM.Cat.shape[0]):
-            self.CM.Cat.Nz[ID][:]=np.sum(self.CM.Cat.Pzm[ID]*nz,axis=1)
-            
+            self.CM.Cat.n_zt[ID][:]=np.sum(self.CM.Cat.Pzm[ID]*n_zm,axis=1)
+
             
     def computePDF_ID(self,ID):
         if self.CM.Cat.chi_best[ID]==0. or np.isnan(self.CM.Cat.chi_best[ID]): return 0.
@@ -111,9 +112,9 @@ class ClassProbDensityMachine():
         P=Pz.reshape((-1,1))*Pm.reshape((1,-1))
         if np.max(P)==0:
             return 0.
-        P/=np.sum(P)
         Pr=ndimage.mean(P, labels=self.LabelsArray, index=self.IndexArray)
         Pr=Pr.reshape((self.Nz_rebin,self.NlogM_rebin))
+        Pr/=np.sum(Pr)
         return Pr
     
         # pylab.clf()

@@ -71,7 +71,8 @@ class ClassSelectionFunction():
         self.DicoSelFunc={"logM_g":self.logM_g,
                           "zg":self.zg,
                           "SelFunc":Selfunc,
-                          "NObsPerSr":NObsPerSr}
+                          "n_zm":NObsPerSr,
+                          "n_z":np.sum(NObsPerSr,axis=1)}
 
         
         # FileName="%s.SelFunc.Dico"%self.CM.DicoDATA["FileNames"]['PhysCatName']

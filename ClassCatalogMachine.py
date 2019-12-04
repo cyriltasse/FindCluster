@@ -55,10 +55,12 @@ class ClassCatalogMachine():
         self.logM_Pars=logM_Pars
         self.DicoDATA["logM_Pars"]=self.logM_Pars
         self.DicoDATA["zg_Pars"]=self.zg_Pars
-        
+
+
     def Init(self,Show=False,FieldName="EN1",ForceLoad=False):
         if FieldName=="EN1":
-            DicoDataNames=FieldsToFiles.DicoDataNames_EN1
+            self.DicoDataNames=DicoDataNames=FieldsToFiles.DicoDataNames_EN1
+            
         if os.path.isfile(DicoDataNames["PickleSave"]) and not ForceLoad:
             self.PickleLoad(DicoDataNames["PickleSave"])
         else:
@@ -66,13 +68,27 @@ class ClassCatalogMachine():
             self.setPhysCatalog(DicoDataNames["PhysCat"])
             self.setPz(DicoDataNames["PzCat"])
             self.setCat(DicoDataNames["PhotoCat"])
+            self.ComputeLM()
             self.ComputeSelFunc()
             self.ComputePzm()
+            
             self.PickleSave(DicoDataNames["PickleSave"])
 
-    #def setField(self,rac,decc,rad):
+    def ComputeLM(self):
+        print>>log,"Compute (ra,dec)->(l,m)..."
+        ra,dec=self.Cat.RA,self.Cat.DEC
+        if type(ra) is not np.ndarray:
+            ra=np.array([ra])
+            dec=np.array([dec])
+        l,m=self.CoordMachine.radec2lm(ra,dec)
+        self.Cat.l[:]=l
+        self.Cat.m[:]=m
+
+        # x=np.int32(np.around(l/self.CellRad))+self.NPix//2
+        # y=np.int32(np.around(m/self.CellRad))+self.NPix//2
+        # x,y=self.give_xy(ra,dec)
+
         
-            
     def ComputeSelFunc(self):
         print>>log,"Computig selection function..."
         CSF=ClassSelectionFunction.ClassSelectionFunction(self)
@@ -84,7 +100,7 @@ class ClassCatalogMachine():
     def ComputePzm(self):
         PDM=ClassProbDensityMachine.ClassProbDensityMachine(self,zg_Pars=self.zg_Pars,logM_Pars=self.logM_Pars)
         PDM.computePDF_All()
-        
+
         
     def setPz(self,PzFile):
         print>>log,"Opening p-z hdf5 file: %s"%PzFile
@@ -98,6 +114,10 @@ class ClassCatalogMachine():
         print>>log,"Opening mass/sfr catalog fits file: %s"%CatName
         self.PhysCat=fitsio.open(CatName)[1].data
         self.PhysCat=self.PhysCat.view(np.recarray)
+
+
+        
+        
 
     def setCat(self,CatName):
         print>>log,"Opening catalog fits file: %s"%CatName
@@ -114,8 +134,9 @@ class ClassCatalogMachine():
                 nr,nz=self.DicoDATA["pz"].shape
                 FIELDS+=[("pz",self.DicoDATA["pz"].dtype,(nz,))]
                 FIELDS+=[("Pzm",np.float32,(self.zg_Pars[-1]-1,self.logM_Pars[-1]-1))]
-                FIELDS+=[("Nz",np.float32,(self.zg_Pars[-1]-1,))]
+                FIELDS+=[("n_zt",np.float32,(self.zg_Pars[-1]-1,))]
             FIELDS+=[("l",np.float32),("m",np.float32)]
+            FIELDS+=[("xCube",np.int16),("yCube",np.int16)]
             PhotoCat=np.zeros((self.PhotoCat.shape[0],),dtype=FIELDS)
             print>>log,"  Copy photo fields ..."
             for field in self.PhotoCat.dtype.fields.keys():
@@ -264,13 +285,34 @@ class ClassCatalogMachine():
         f,p,_,_=self.MaskCasaImage.toworld([0,0,0,0])
         self.fp=f,p
         self.CDELT=abs(self.MaskFits.header["CDELT1"])
+        rac=self.MaskFits.header["CRVAL1"]*np.pi/180
+        decc=self.MaskFits.header["CRVAL2"]*np.pi/180
+        
+        self.CoordMachine = ModCoord.ClassCoordConv(rac, decc)
         if self.OmegaTotal is None:
             NPixZero=self.MaskArray.size-np.count_nonzero(self.MaskArray)
             self.OmegaTotal=NPixZero*(self.CDELT*np.pi/180)**2
+            
+    def cutCat(self,rac,decc,NPix,CellRad):
+        stop
+        print>>log,"Selection objects in window..."
+        lc,mc=self.CoordMachine.radec2lm(rac,decc)
+        r=((NPix//2)+0.5)*CellRad
+        l0,l1=lc-r,lc+r
+        m0,m1=mc-r,mc+r
 
+        Cl=((self.Cat.l>l0)&(self.Cat.l<l1))
+        Cm=((self.Cat.m>m0)&(self.Cat.m<m1))
+        ind=np.where(Cl&Cm)[0]
+
+        N0=self.Cat.shape[0]
+        self.Cat=self.Cat[ind]
+        N1=self.Cat.shape[0]
+        print>>log, "Selected %i objects [out of %i - that is %.3f%% of the main catalog]"%(N1,N0,100*float(N1)/N0)
+        self.Cat.xCube=np.int32(np.around((self.Cat.l-lc)/CellRad))+NPix//2
+        self.Cat.yCube=np.int32(np.around((self.Cat.m-mc)/CellRad))+NPix//2
         
         
-   
 def test(Show=True,NameOut="Test100kpc.fits"):
 
     Cat="/data/tasse/DataDeepFields/EN1/EN1_opt_spitzer_merged_vac_opt3as_irac4as_all_hpx_public.fits"
@@ -305,7 +347,11 @@ def test(Show=True,NameOut="Test100kpc.fits"):
 #         APP.terminate()
 #         APP.shutdown()
 #         Multiprocessing.cleanupShm()
-      
-if __name__=="__main__":
+
+def main():
     CM=ClassCatalogMachine()
     CM.Init(ForceLoad=True)
+
+
+if __name__=="__main__":
+    main()

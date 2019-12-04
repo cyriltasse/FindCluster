@@ -5,6 +5,8 @@ import ClassFFT
 import matplotlib.pyplot as pylab
 from DDFacet.ToolsDir import ModCoord
 from DDFacet.Other import ClassTimeIt
+from DDFacet.Other import logger
+log = logger.getLogger("ClassGammaMachine")
 
 class ClassGammaMachine():
     def __init__(self,
@@ -55,8 +57,10 @@ class ClassGammaMachine():
                 self.L_fScalePix.append(fScalePix)
                 NParms=(N//2*N+N//2)*2+1
                 self.L_NParms.append(NParms)
-                print zm,NParms
+                print>>log,"  - Slice #%i [z=%.2f -> z=%.2f]: %i parameters"%(iz,z0,z1,NParms)
+
             self.NParms=np.sum(self.L_NParms)
+        print>>log,"Total number of free parameters: %i"%self.NParms
 
     def PlotGammaCube(self):
         import pylab
@@ -67,7 +71,7 @@ class ClassGammaMachine():
             pylab.draw()
             pylab.show(False)
             pylab.pause(0.1)
-            
+
     def giveGamma(self,z,ra,dec):
         
         if self.GammaCube is None:
@@ -88,6 +92,8 @@ class ClassGammaMachine():
         # print "giveGamma",x,y
         ind=x*ny+y
         return self.GammaCube[iz].flat[ind]
+
+    
 
     def giveSlice_ConvPaddedFFT(self,LX,iSlice):
         
