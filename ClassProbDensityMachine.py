@@ -80,17 +80,17 @@ class ClassProbDensityMachine():
             #print float(ID)/self.CM.Cat.shape[0]
             self.CM.Cat.Pzm[ID][:,:]=self.computePDF_ID(ID)
             if np.max(self.CM.Cat.Pzm[ID][:,:])>0.:
-                indkeep[ID]=1
+                self.CM.Cat.PosteriorOK[ID]=1
         print>>log,"  have kept %.4f%% of objects (others have bad fit?)"%(100*float(np.count_nonzero(indkeep))/indkeep.size)
-        self.CM.Cat=self.CM.Cat[indkeep]
-        print np.max(np.max(self.CM.Cat.Pzm,axis=-1),axis=-1)
-        self.indkeep=indkeep
+        
+
+
+    def compute_n_zt(self):
         print>>log,"Compute n_zt..."
         n_zm=self.CM.DicoDATA["DicoSelFunc"]["n_zm"]
         for ID in range(self.CM.Cat.shape[0]):
             self.CM.Cat.n_zt[ID][:]=np.sum(self.CM.Cat.Pzm[ID]*n_zm,axis=1)
-
-            
+    
     def computePDF_ID(self,ID):
         if self.CM.Cat.chi_best[ID]==0. or np.isnan(self.CM.Cat.chi_best[ID]): return 0.
         Median_m=self.CM.Cat.Mass_median[ID]

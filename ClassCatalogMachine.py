@@ -69,8 +69,10 @@ class ClassCatalogMachine():
             self.setPz(DicoDataNames["PzCat"])
             self.setCat(DicoDataNames["PhotoCat"])
             self.ComputeLM()
-            self.ComputeSelFunc()
             self.ComputePzm()
+            self.Cat=self.Cat[self.Cat.PosteriorOK==1]
+            self.ComputeSelFunc()
+            self.PDM.compute_n_zt()
             
             self.PickleSave(DicoDataNames["PickleSave"])
 
@@ -98,8 +100,8 @@ class ClassCatalogMachine():
 
 
     def ComputePzm(self):
-        PDM=ClassProbDensityMachine.ClassProbDensityMachine(self,zg_Pars=self.zg_Pars,logM_Pars=self.logM_Pars)
-        PDM.computePDF_All()
+        self.PDM=ClassProbDensityMachine.ClassProbDensityMachine(self,zg_Pars=self.zg_Pars,logM_Pars=self.logM_Pars)
+        return self.PDM.computePDF_All()
 
         
     def setPz(self,PzFile):
@@ -137,6 +139,7 @@ class ClassCatalogMachine():
                 FIELDS+=[("n_zt",np.float32,(self.zg_Pars[-1]-1,))]
             FIELDS+=[("l",np.float32),("m",np.float32)]
             FIELDS+=[("xCube",np.int16),("yCube",np.int16)]
+            FIELDS+=[("PosteriorOK",np.bool)]
             PhotoCat=np.zeros((self.PhotoCat.shape[0],),dtype=FIELDS)
             print>>log,"  Copy photo fields ..."
             for field in self.PhotoCat.dtype.fields.keys():
@@ -250,6 +253,7 @@ class ClassCatalogMachine():
         FileNames={"MaskFitsName":self.MaskFitsName,
                   "PhotoCatName":self.PhotoCatName,
                   "PhysCatName":self.PhysCatName}
+        self.DicoDATA["Cat"]=self.Cat
         self.DicoDATA["FileNames"]=FileNames
         self.DicoDATA["OmegaTotal"]=self.OmegaTotal
         MyPickle.DicoNPToFile(self.DicoDATA,FileName)
@@ -287,6 +291,8 @@ class ClassCatalogMachine():
         self.CDELT=abs(self.MaskFits.header["CDELT1"])
         rac=self.MaskFits.header["CRVAL1"]*np.pi/180
         decc=self.MaskFits.header["CRVAL2"]*np.pi/180
+        self.racdecc_main=rac,decc
+        self.rac_main,self.decc_main=rac,decc
         
         self.CoordMachine = ModCoord.ClassCoordConv(rac, decc)
         if self.OmegaTotal is None:
@@ -294,7 +300,6 @@ class ClassCatalogMachine():
             self.OmegaTotal=NPixZero*(self.CDELT*np.pi/180)**2
             
     def cutCat(self,rac,decc,NPix,CellRad):
-        stop
         print>>log,"Selection objects in window..."
         lc,mc=self.CoordMachine.radec2lm(rac,decc)
         r=((NPix//2)+0.5)*CellRad
@@ -303,15 +308,17 @@ class ClassCatalogMachine():
 
         Cl=((self.Cat.l>l0)&(self.Cat.l<l1))
         Cm=((self.Cat.m>m0)&(self.Cat.m<m1))
-        ind=np.where(Cl&Cm)[0]
+        CP=(self.Cat.PosteriorOK==1)
+        ind=np.where(Cl&Cm&CP)[0]
 
         N0=self.Cat.shape[0]
-        self.Cat=self.Cat[ind]
-        N1=self.Cat.shape[0]
+        self.Cat_s=self.Cat[ind]
+        self.Cat_s=self.Cat_s.view(np.recarray)
+        N1=self.Cat_s.shape[0]
         print>>log, "Selected %i objects [out of %i - that is %.3f%% of the main catalog]"%(N1,N0,100*float(N1)/N0)
-        self.Cat.xCube=np.int32(np.around((self.Cat.l-lc)/CellRad))+NPix//2
-        self.Cat.yCube=np.int32(np.around((self.Cat.m-mc)/CellRad))+NPix//2
-        
+        self.Cat_s.xCube=np.int32(np.around((self.Cat_s.l-lc)/CellRad))+NPix//2
+        self.Cat_s.yCube=np.int32(np.around((self.Cat_s.m-mc)/CellRad))+NPix//2
+
         
 def test(Show=True,NameOut="Test100kpc.fits"):
 

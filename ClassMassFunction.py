@@ -1,4 +1,4 @@
-import ClassGammaMachine
+import ClassGammaMachine_FFT as ClassGammaMachine
 from astropy.cosmology import WMAP9 as cosmo
 import numpy as np
 from DDFacet.Other import ClassTimeIt
@@ -32,6 +32,7 @@ class ClassMassFunction():
 
         
     def setGammaGrid(self,
+                     radec_main,
                      radec,
                      CellDeg,
                      NPix,
@@ -39,7 +40,8 @@ class ClassMassFunction():
                      ScaleKpc=500):
         Mode="ConvGaussNoise"
         Mode="ConvPaddedFFT"
-        CGM=ClassGammaMachine.ClassGammaMachine(radec,
+        CGM=ClassGammaMachine.ClassGammaMachine(radec_main,
+                                                radec,
                                                 CellDeg,
                                                 NPix,
                                                 zParms=zParms,

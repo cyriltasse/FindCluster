@@ -2,31 +2,64 @@ import numpy as np
 import ClassMassFunction
 import ClassCatalogMachine
 import ClassDisplayRGB
+from DDFacet.Other import ClassTimeIt
+from DDFacet.ToolsDir.ModToolBox import EstimateNpix
+np.random.seed(1)
+from DDFacet.Other import logger
+log = logger.getLogger("ClassLikelihoodMachine")
+
+import ClassInitGammaCube
 
 def test():
     CM=ClassCatalogMachine.ClassCatalogMachine()
     CM.Init()
     CLM=ClassLikelihoodMachine(CM)
     #CLM.showRGB()
-
+    
+    CIGC=ClassInitGammaCube.ClassInitGammaCube(CLM)
+    Cube=CIGC.InitGammaCube()
+    CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=Cube)
+    stop
+    return
     X=np.random.randn(CLM.MassFunction.GammaMachine.NParms)
+
+    # # ##############################
+    # # Plot PSF
+    # X.fill(0)
+    # ii=0
+    # for iSlice in range(len(CLM.MassFunction.GammaMachine.L_NParms)):
+    #     n=CLM.MassFunction.GammaMachine.L_NParms[iSlice]
+    #     X[ii]=1.
+    #     X[ii:ii+(n-1)/2]=1.
+    #     ii+=n
+    # # ##############################
+
     CLM.MassFunction.updateGammaCube(X)
     CLM.MassFunction.GammaMachine.PlotGammaCube()
 
+
+    T=ClassTimeIt.ClassTimeIt()
     for i in range(1000):
-        print i
-        print CLM.log_prob(X)
-    
+        CLM.log_prob(X)
+    T.timeit()
     stop
 
 class ClassLikelihoodMachine():
     def __init__(self,CM):
         self.CM=CM
+        
         rac,decc=241.20678,55.59485 # cluster
-        self.CellDeg=0.001
+        self.FOV=0.15
+        
+        self.CellDeg=0.001/1.
         self.CellRad=self.CellDeg*np.pi/180
-        self.NPix=201
-        self.ScaleKpc=500
+
+        
+        self.NPix=int(self.FOV/self.CellDeg)
+        self.NPix, _ = EstimateNpix(float(self.NPix), Padding=1)
+
+        print>>log,"Choosing NPix=%i"%self.NPix
+        self.ScaleKpc=[500]
         self.rac_deg,self.decc_deg=rac,decc
         self.rac,self.decc=rac*np.pi/180,decc*np.pi/180
         
@@ -34,9 +67,13 @@ class ClassLikelihoodMachine():
         self.logMParms=self.CM.logM_Pars
         self.logM_g=np.linspace(*self.logMParms)
         self.CM.cutCat(self.rac,self.decc,self.NPix,self.CellRad)
-        #self.CM.MaskArrayCube=self.CM.MaskArray.
+
+        # self.CM.MaskArrayCube=self.CM.MaskArray.
+
         self.MassFunction=ClassMassFunction.ClassMassFunction()
-        self.MassFunction.setGammaGrid((self.rac,self.decc),
+        
+        self.MassFunction.setGammaGrid((self.CM.rac_main,self.CM.decc_main),
+                                       (self.rac,self.decc),
                                        self.CellDeg,
                                        self.NPix,
                                        zParms=self.zParms,
@@ -44,34 +81,44 @@ class ClassLikelihoodMachine():
         self.MassFunction.setSelectionFunction(self.CM)
 
         self.NSlice=self.zParms[-1]-1
-        self.IndexCube=np.array([i*self.NPix**2+self.CM.Cat.yCube*self.NPix+self.CM.Cat.xCube for i in range(self.NSlice)]).flatten()
+        self.IndexCube=np.array([i*self.NPix**2+self.CM.Cat_s.yCube*self.NPix+self.CM.Cat_s.xCube for i in range(self.NSlice)]).flatten()
         
-    def showRGB(self):
+    def showRGB(self,zLabels=False):
         DRGB=ClassDisplayRGB.ClassDisplayRGB()
         DRGB.setRGB_FITS(*self.CM.DicoDataNames["RGBNames"])
         DRGB.setRaDec(self.rac_deg,self.decc_deg)
         DRGB.setBoxArcMin(self.NPix*self.CellDeg*60.)
         DRGB.FitsToArray()
         DRGB.Display()#Scale="linear",vmin=,vmax=30)
-        import pylab
-        pylab.scatter(self.CM.Cat.l,self.CM.Cat.m)
-        for i in range(self.CM.Cat.shape[0]):
-            pylab.text(self.CM.Cat.l[i],self.CM.Cat.m[i],self.CM.Cat.z[i],color="red")
-        pylab.draw()
+        if zLabels:
+            import pylab
+            pylab.scatter(self.CM.Cat_s.l,self.CM.Cat_s.m)
+            for i in range(self.CM.Cat_s.shape[0]):
+                pylab.text(self.CM.Cat_s.l[i],self.CM.Cat_s.m[i],self.CM.Cat_s.z[i],color="red")
+            pylab.draw()
+
         
     def log_prob(self, X):
+        T=ClassTimeIt.ClassTimeIt()
+        T.disable()
         self.MassFunction.updateGammaCube(X)
+        T.timeit("update cube")
         GammaCube=self.MassFunction.GammaMachine.GammaCube
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
         Nx=np.sum(GammaCube*n_z.reshape((-1,1,1)),axis=0)
+        T.timeit("Nx")
         Nx_Omega0=np.sum(Nx)*self.CellRad**2
+        T.timeit("Nx_Omega0")
         
-        Ns=self.CM.Cat.shape[0]
+        Ns=self.CM.Cat_s.shape[0]
         gamma_xz=GammaCube.flat[self.IndexCube].reshape((self.NSlice,Ns)).T
+        T.timeit("gamma_xz")
         
         Nx_Omega1=np.sum(gamma_xz*n_z.reshape((1,-1)))
-        Nx1_Omega1=np.sum(np.log(np.sum(gamma_xz*self.CM.Cat.n_zt,axis=1)))
-        stop
+        T.timeit("Nx_Omega1")
+        Nx1_Omega1=np.sum(np.log(np.sum(gamma_xz*self.CM.Cat_s.n_zt,axis=1)))
+        T.timeit("Nx1_Omega1")
+
         return -Nx_Omega0+Nx_Omega1+Nx1_Omega1
 
         
@@ -80,7 +127,7 @@ class ClassLikelihoodMachine():
 
     #     #self.MassFunction.
     #     z0,z1=self.z0z1
-    #     X=self.Cat.x
+    #     X=self.Cat_s.x
     #     Y=self.Cat.y
         
     #     ni=self.Cat.n_i

@@ -64,6 +64,7 @@ class ClassGammaMachine():
 
     def PlotGammaCube(self):
         import pylab
+        pylab.figure("Gamma Cube")
         pylab.clf()
         for iPlot in range(9):
             pylab.subplot(3,3,iPlot+1)
@@ -106,6 +107,7 @@ class ClassGammaMachine():
         # G=np.exp(-dd**2/(2.*ScalePix**2))
         # R=x.reshape((self.NPix,self.NPix))
 
+        T=ClassTimeIt.ClassTimeIt("Slice")
         x=LX[iSlice]
         z0=self.zg[iSlice]
         z1=self.zg[iSlice+1]
@@ -132,6 +134,7 @@ class ClassGammaMachine():
         
         Mean=.5
         Amplitude=1.
+        T.timeit("unpack")
         FFTM=ClassFFT.FFTW_2Donly_np(F0.shape, F0.dtype)#, norm=True, ncores=1, FromSharedId=None)
 
         
@@ -155,6 +158,7 @@ class ClassGammaMachine():
         # pylab.show(False)
         # pylab.pause(0.1)
         Slice[Slice<0]=1e-10
+        T.timeit("iFT")
         return Slice
 
     
@@ -162,13 +166,16 @@ class ClassGammaMachine():
     def computeGammaCube(self,X):
         LX=[]
         ii=0
+        T=ClassTimeIt.ClassTimeIt("Gamma")
         for iSlice in range(self.NSlice):
             LX.append(X[ii:ii+self.L_NParms[iSlice]])
             ii+=self.L_NParms[iSlice]
+        T.timeit("unpack")
         GammaCube=np.zeros((self.zg.size-1,self.NPix,self.NPix),np.float32)
         for iz in range(self.zg.size-1):
             z0,z1=self.zg[iz],self.zg[iz+1]
             GammaCube[iz,:,:]=self.SliceFunction(LX,iz)
+        T.timeit("Slices")
         self.GammaCube=GammaCube
 
             
