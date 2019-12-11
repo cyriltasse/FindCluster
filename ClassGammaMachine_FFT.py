@@ -160,7 +160,9 @@ class ClassGammaMachine():
             r=np.sqrt(fx**2+fy**2)
             G=np.exp(-r**2/(2.*fScaleRad0**2))
             Gs=np.sum(G)
-            Nr=int(Gs/8.)
+            Nr=int(Gs/2.)#int(Gs/4.)
+            Nr=int(Gs)
+            #Nr=int(Gs/4.)
             Nr=np.max([100,Nr])
             def giveRand2D():
                 fx_r=np.int32(np.random.randn(Nr)*fScalePix0+self.NPix//2)
@@ -168,11 +170,22 @@ class ClassGammaMachine():
                 cx=((fx_r>=0)&(fx_r<self.NPix))
                 cy=((fy_r>=0)&(fy_r<self.NPix))
                 C=(cx&cy)
+
+                # dx=(np.random.rand(Nr)-0.5)*2*fScalePix0*2
+                # dy=(np.random.rand(Nr)-0.5)*2*fScalePix0*2
+                
+                dx,dy=np.mgrid[-fScalePix0:fScalePix0+1,-fScalePix0:fScalePix0+1]
+                dx=dx.flatten()
+                dy=dy.flatten()
+                C=(np.sqrt(dx**2+dy**2)<fScalePix0)
+                fx_r=np.int32(dx+self.NPix//2)
+                fy_r=np.int32(dy+self.NPix//2)
+                
                 return fx_r[C],fy_r[C]
 
             fx,fy=giveRand2D()
             Mask.flat[fy*self.NPix+fx]=1
-                
+            #Mask.fill(1)
             Mask[0:self.NPix//2,:]=0
             Mask[self.NPix//2,0:self.NPix//2]=0
             Mask[self.NPix//2,self.NPix//2]=0
@@ -182,10 +195,11 @@ class ClassGammaMachine():
             NParms=ind.size*2+1
             self.L_NParms.append(NParms)
             print>>log,"  -- Slice #%i zm=%.2f [z=%.2f -> z=%.2f]: %i parameters"%(iz,zm,z0,z1,NParms)
-
-
+            
+            
             Mask+=Mask[::-1,::-1].conj()
             Mask[self.NPix//2,self.NPix//2]=1
+            
             # import pylab
             # pylab.figure("Sampling")
             # pylab.clf()
@@ -198,15 +212,35 @@ class ClassGammaMachine():
         self.NParms=np.sum(self.L_NParms)
         print>>log,"Total number of free parameters: %i"%self.NParms
 
-    def PlotGammaCube(self,Cube=None):
+
+    def CubeToVec(self,Cube):
+        ii=0
+        Cube=np.complex64(Cube.copy())
+        XOut=np.zeros((self.NParms,),np.float32)
+        for iSlice in range(self.NSlice):
+            FFTM=ClassFFT.FFTW_2Donly_np((self.NPix,self.NPix), Cube.dtype)#, norm=True, ncores=1, FromSharedId=None)
+            N=self.L_NParms[iSlice]
+            n=(N-1)/2
+            Slice=FFTM.fft(Cube[iSlice])
+            x=Slice.flat[self.L_Ind[iSlice]]
+            XOut[ii]=Slice[self.NPix//2,self.NPix//2].real
+            XOut[ii+1:ii+n+1]=x.real
+            XOut[ii+n+1:ii+N]=x.imag
+            ii+=N
+        return XOut
+            
+            
+    def PlotGammaCube(self,Cube=None,FigName="Gamma Cube"):
         if Cube is None:
             Cube=self.GammaCube
         import pylab
-        pylab.figure("Gamma Cube")
+        pylab.figure(FigName)
         pylab.clf()
         for iPlot in range(9):
+            S=Cube[iPlot]
             pylab.subplot(3,3,iPlot+1)
-            pylab.imshow(Cube[iPlot],interpolation="nearest")
+            pylab.imshow(S,interpolation="nearest")#,vmin=0.,vmax=2.)
+            pylab.title("[%f - %f]"%(S.min(),S.max()))
             pylab.draw()
             pylab.show(False)
             pylab.pause(0.1)
@@ -270,7 +304,7 @@ class ClassGammaMachine():
 
         
         
-        Slice=FFTM.ifft(F)
+        Slice=FFTM.ifft(F)#/(x.size-2)
 
         # pylab.clf()
         # pylab.subplot(1,2,1)
@@ -286,6 +320,7 @@ class ClassGammaMachine():
         # Slice=(A-(m0+m1)/2.)/(m1-m0)*Amplitude+Mean
 
         Slice=np.real(Slice)
+        #print np.mean(Slice)
 
         # pylab.clf()
         # pylab.imshow(GammaCube[iz,:,:],interpolation="nearest",vmin=0,vmax=2.)

@@ -46,7 +46,7 @@ def AngDist(ra0,dec0,ra1,dec1):
     return AC(D)
 
 class ClassCatalogMachine():
-    def __init__(self,zg_Pars=[0.01,1.5,10],logM_Pars=[8.,12.,13]):
+    def __init__(self,zg_Pars=[0.1,1.5,10],logM_Pars=[8.,12.,13]):
         self.MaskFits=None
         self.DicoDATA={}
         self.PhysCat=None
@@ -70,7 +70,10 @@ class ClassCatalogMachine():
             self.setCat(DicoDataNames["PhotoCat"])
             self.ComputeLM()
             self.ComputePzm()
+            N0=self.Cat.shape[0]
             self.Cat=self.Cat[self.Cat.PosteriorOK==1]
+            N1=self.Cat.shape[0]
+            print>>log,"  have kept %.4f%% of objects (others have bad fit?)"%(100*float(N1)/N0)
             self.ComputeSelFunc()
             self.PDM.compute_n_zt()
             

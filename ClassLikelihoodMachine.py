@@ -16,12 +16,20 @@ def test():
     CLM=ClassLikelihoodMachine(CM)
     #CLM.showRGB()
     
-    CIGC=ClassInitGammaCube.ClassInitGammaCube(CLM)
-    Cube=CIGC.InitGammaCube()
-    CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=Cube)
-    stop
-    return
-    X=np.random.randn(CLM.MassFunction.GammaMachine.NParms)
+    
+    # CIGC=ClassInitGammaCube.ClassInitGammaCube(CLM)
+    # Cube=CIGC.InitGammaCube()
+    # np.save("Cube",Cube)
+    
+    Cube=np.load("Cube.npy")
+    CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=Cube,FigName="Measured")
+    CLM.MassFunction.GammaMachine.setWaveType(Kind="haar",Th=3e-2,Mode="symmetric")
+    #CLM.MassFunction.GammaMachine.setWaveType(Kind="rbio1.1",Th=1e-2,Mode="symmetric")
+    CLM.MassFunction.GammaMachine.setReferenceCube(Cube)
+    
+    #Cube.fill(0.)
+    #Cube[:,100,100]=1.
+    X=CLM.MassFunction.GammaMachine.CubeToVec(Cube)
 
     # # ##############################
     # # Plot PSF
@@ -33,6 +41,16 @@ def test():
     #     X[ii:ii+(n-1)/2]=1.
     #     ii+=n
     # # ##############################
+
+
+    # CLM.MassFunction.updateGammaCube(X)
+    # Cr=CLM.MassFunction.GammaMachine.GammaCube-Cube
+    # C=CLM.MassFunction.GammaMachine.GammaCube
+    # CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=C,FigName="Filtered")
+    
+
+    #X=np.random.randn(CLM.MassFunction.GammaMachine.NParms)
+
 
     CLM.MassFunction.updateGammaCube(X)
     CLM.MassFunction.GammaMachine.PlotGammaCube()
@@ -57,7 +75,7 @@ class ClassLikelihoodMachine():
         
         self.NPix=int(self.FOV/self.CellDeg)
         self.NPix, _ = EstimateNpix(float(self.NPix), Padding=1)
-
+        self.NPix=148
         print>>log,"Choosing NPix=%i"%self.NPix
         self.ScaleKpc=[500]
         self.rac_deg,self.decc_deg=rac,decc

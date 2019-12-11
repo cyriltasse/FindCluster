@@ -1,4 +1,5 @@
-import ClassGammaMachine_FFT as ClassGammaMachine
+#import ClassGammaMachine_FFT as ClassGammaMachine
+import ClassGammaMachine_Wave as ClassGammaMachine
 from astropy.cosmology import WMAP9 as cosmo
 import numpy as np
 from DDFacet.Other import ClassTimeIt

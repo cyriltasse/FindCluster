@@ -81,7 +81,7 @@ class ClassProbDensityMachine():
             self.CM.Cat.Pzm[ID][:,:]=self.computePDF_ID(ID)
             if np.max(self.CM.Cat.Pzm[ID][:,:])>0.:
                 self.CM.Cat.PosteriorOK[ID]=1
-        print>>log,"  have kept %.4f%% of objects (others have bad fit?)"%(100*float(np.count_nonzero(indkeep))/indkeep.size)
+
         
 
 
