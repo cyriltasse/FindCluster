@@ -7,6 +7,7 @@ from DDFacet.ToolsDir.ModToolBox import EstimateNpix
 np.random.seed(1)
 from DDFacet.Other import logger
 log = logger.getLogger("ClassLikelihoodMachine")
+from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 
 import ClassInitGammaCube
 
@@ -17,7 +18,8 @@ def test():
     #CLM.showRGB()
     
     
-    # CIGC=ClassInitGammaCube.ClassInitGammaCube(CLM)
+    # CIGC=ClassInitGammaCube.ClassInitGammaCube(CLM,ScaleKpc=[200.,500.])
+    # CIGC.finaliseInit()
     # Cube=CIGC.InitGammaCube()
     # np.save("Cube",Cube)
     
@@ -66,133 +68,72 @@ class ClassLikelihoodMachine():
     def __init__(self,CM):
         self.CM=CM
         
-        rac,decc=241.20678,55.59485 # cluster
-        self.FOV=0.15
-        
-        self.CellDeg=0.001/1.
-        self.CellRad=self.CellDeg*np.pi/180
-
-        
-        self.NPix=int(self.FOV/self.CellDeg)
-        self.NPix, _ = EstimateNpix(float(self.NPix), Padding=1)
-        self.NPix=148
-        print>>log,"Choosing NPix=%i"%self.NPix
         self.ScaleKpc=[500]
-        self.rac_deg,self.decc_deg=rac,decc
-        self.rac,self.decc=rac*np.pi/180,decc*np.pi/180
         
         self.zParms=self.CM.zg_Pars
         self.logMParms=self.CM.logM_Pars
         self.logM_g=np.linspace(*self.logMParms)
-        self.CM.cutCat(self.rac,self.decc,self.NPix,self.CellRad)
 
         # self.CM.MaskArrayCube=self.CM.MaskArray.
 
         self.MassFunction=ClassMassFunction.ClassMassFunction()
         
-        self.MassFunction.setGammaGrid((self.CM.rac_main,self.CM.decc_main),
-                                       (self.rac,self.decc),
-                                       self.CellDeg,
-                                       self.NPix,
-                                       zParms=self.zParms,
-                                       ScaleKpc=self.ScaleKpc)
         self.MassFunction.setSelectionFunction(self.CM)
 
         self.NSlice=self.zParms[-1]-1
-        self.IndexCube=np.array([i*self.NPix**2+self.CM.Cat_s.yCube*self.NPix+self.CM.Cat_s.xCube for i in range(self.NSlice)]).flatten()
-        
-    def showRGB(self,zLabels=False):
-        DRGB=ClassDisplayRGB.ClassDisplayRGB()
-        DRGB.setRGB_FITS(*self.CM.DicoDataNames["RGBNames"])
-        DRGB.setRaDec(self.rac_deg,self.decc_deg)
-        DRGB.setBoxArcMin(self.NPix*self.CellDeg*60.)
-        DRGB.FitsToArray()
-        DRGB.Display()#Scale="linear",vmin=,vmax=30)
-        if zLabels:
-            import pylab
-            pylab.scatter(self.CM.Cat_s.l,self.CM.Cat_s.m)
-            for i in range(self.CM.Cat_s.shape[0]):
-                pylab.text(self.CM.Cat_s.l[i],self.CM.Cat_s.m[i],self.CM.Cat_s.z[i],color="red")
-            pylab.draw()
+        APP.registerJobHandlers(self)
 
+    def ComputeIndexCube(self,NPix):
+        #self.IndexCube=np.array([i*NPix**2+self.CM.Cat_s.yCube*NPix+self.CM.Cat_s.xCube for i in range(self.NSlice)]).flatten()
+        self.IndexCube=np.array([self.CM.Cat_s.yCube*NPix+self.CM.Cat_s.xCube]).flatten()
+        
         
     def log_prob(self, X):
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
         self.MassFunction.updateGammaCube(X)
         T.timeit("update cube")
+        Cell=(1./3600)*np.pi/180
+        # GammaCube=self.MassFunction.GammaMachine.GammaCube.copy()
+        # for iz in range(self.NSlice):
+        #     GammaCube[iz]=GammaCube[iz].T[::-1,:]
         GammaCube=self.MassFunction.GammaMachine.GammaCube
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
         Nx=np.sum(GammaCube*n_z.reshape((-1,1,1)),axis=0)
         T.timeit("Nx")
-        Nx_Omega0=np.sum(Nx)*self.CellRad**2
+        Nx_Omega0=np.sum(Nx)*self.MassFunction.GammaMachine.CellRad**2
         T.timeit("Nx_Omega0")
         
         Ns=self.CM.Cat_s.shape[0]
-        gamma_xz=GammaCube.flat[self.IndexCube].reshape((self.NSlice,Ns)).T
+        
+        #gamma_xz=GammaCube.flat[self.IndexCube].reshape((self.NSlice,Ns)).T
+        
+        #gamma_xz=np.array([GammaCube[iz].flat[self.IndexCube] for iz in range(self.NSlice)]).reshape((self.NSlice,Ns)).T
+
+        gamma_xz=np.zeros((self.NSlice,Ns),np.float64)
+        for iS in range(self.CM.Cat_s.shape[0]):
+            gamma_xz[:,iS]=GammaCube[:,self.CM.Cat_s.xCube[iS],self.CM.Cat_s.yCube[iS]]
+            
+        gamma_xz=gamma_xz.T
         T.timeit("gamma_xz")
+
+        # gamma_xz2=np.zeros_like(GammaCube)
+        # gamma_xz2[:,self.CM.Cat_s.xCube[iS],self.CM.Cat_s.yCube[iS]]=32
+        # import pylab
+        # pylab.figure("test")
+        # pylab.clf()
+        # pylab.imshow(gamma_xz2[1],interpolation="nearest")
+        # pylab.draw()
+        # pylab.show(False)
         
-        Nx_Omega1=np.sum(gamma_xz*n_z.reshape((1,-1)))
+        Nx_Omega1=np.sum(gamma_xz*n_z.reshape((1,-1)))*Cell**2
         T.timeit("Nx_Omega1")
-        Nx1_Omega1=np.sum(np.log(np.sum(gamma_xz*self.CM.Cat_s.n_zt,axis=1)))
+        S0=np.sum(gamma_xz*self.CM.Cat_s.n_zt*Cell**2,axis=1)
+        S0[S0<=0]=1e-100
+        Nx1_Omega1=np.sum(np.log(S0))
         T.timeit("Nx1_Omega1")
+        L=-np.float64(Nx_Omega0)+np.float64(Nx_Omega1)+np.float64(Nx1_Omega1)
 
-        return -Nx_Omega0+Nx_Omega1+Nx1_Omega1
+        return L,-Nx_Omega0,Nx_Omega1,Nx1_Omega1
 
         
-        
-    # def log_prob(self, x):
-
-    #     #self.MassFunction.
-    #     z0,z1=self.z0z1
-    #     X=self.Cat_s.x
-    #     Y=self.Cat.y
-        
-    #     ni=self.Cat.n_i
-    #     iz=self.Cat.iz
-    #     T=ClassTimeIt.ClassTimeIt()
-    #     T.disable()
-    #     # ######################################
-    #     # Init Mass Function for that one X
-    #     if self.MassFuncLogProb is None:
-    #         self.MassFuncLogProb=ClassMassFunction.ClassMassFunction()
-    #         T.timeit("MassFunc")
-    #         self.MassFuncLogProb.setGammaFunction((self.rac,self.decc),
-    #                                               self.CellDeg,
-    #                                               self.NPix,
-    #                                               z=self.zParms,
-    #                                               ScaleKpc=self.ScaleKpc)
-            
-    #     MassFunc=self.MassFuncLogProb
-    #     T.timeit("SetGammaFunc")
-    #     LX=[x]
-    #     MassFunc.CGM.computeGammaCube(LX)
-    #     GammaSlice=MassFunc.CGM.GammaCube[0]
-    #     T.timeit("ComputeGammaFunc")
-    #     # ######################################
-
-    #     OmegaSr=((1./3600)*np.pi/180)**2
-    #     L=0
-    #     for iLogM in range(self.logM_g.size-1):
-    #         logM0,logM1=self.logM_g[iLogM],self.logM_g[iLogM+1]
-    #         logMm=(logM0+logM1)/2.
-    #         zm=(z0+z1)/2.
-    #         dz=z1-z0
-    #         dlogM=logM1-logM0
-    #         dV_dz=cosmo.differential_comoving_volume(zm).to_value()
-    #         T.timeit("Cosmo")
-    #         V=dz*dV_dz*self.CellRad**2
-            
-    #         n0=MassFunc.givePhiM(zm,logMm)*dlogM*V
-    #         T.timeit("n0")
-    #         L+=-np.sum(GammaSlice)*n0
-    #         for iS in range(self.Cat.ra.size):
-    #             n=MassFunc.give_N((self.Cat.ra[iS],self.Cat.dec[iS]),
-    #                               (z0,z1),
-    #                               (logM0,logM1),
-    #                               OmegaSr)
-    #             L+=np.log(n)
-
-    #         T.timeit("log(n)")
-    #     return L
-

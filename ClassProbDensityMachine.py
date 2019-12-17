@@ -115,6 +115,10 @@ class ClassProbDensityMachine():
         Pr=ndimage.mean(P, labels=self.LabelsArray, index=self.IndexArray)
         Pr=Pr.reshape((self.Nz_rebin,self.NlogM_rebin))
         Pr/=np.sum(Pr)
+
+        # Pr.fill(0.)
+        # Pr[self.Nz_rebin//2,self.NlogM_rebin//2]=1.
+        
         return Pr
     
         # pylab.clf()

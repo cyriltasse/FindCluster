@@ -201,12 +201,10 @@ class ClassCatalogMachine():
                      (self.Cat.FLAG_OVERLAP==7)&
                      (self.Cat.ch2_swire_fluxerr > 0))[0]
         
-        
         # ind=np.where((self.Cat.FLAG_CLEAN == 1)&
         #              (self.Cat.i_fluxerr > 0)&
         #              #(self.Cat.K_flux > 0)&
         #              (self.Cat.ch2_swire_fluxerr > 0))[0]
-        
         
         self.Cat=self.Cat[ind]
         #self.CatRange=self.CatRange[ind]
@@ -305,23 +303,53 @@ class ClassCatalogMachine():
     def cutCat(self,rac,decc,NPix,CellRad):
         print>>log,"Selection objects in window..."
         lc,mc=self.CoordMachine.radec2lm(rac,decc)
-        r=((NPix//2)+0.5)*CellRad
-        l0,l1=lc-r,lc+r
-        m0,m1=mc-r,mc+r
+        # r=((NPix//2)+0.5)*CellRad
+        # l0,l1=lc-r,lc+r
+        # m0,m1=mc-r,mc+r
+        #print>>log, (lc,mc)
+
+        N0=(NPix)//2
+        N1=NPix-1-N0
+        #print>>log,(N0,N1)
+        lg,mg=np.mgrid[-N0*CellRad+lc:N1*CellRad+lc:1j*NPix,-N0*CellRad+mc:N1*CellRad+mc:1j*NPix]
+        #print>>log,(np.mgrid[-N0:N1:1j*NPix])
+        l0=lg.min()-0.5*CellRad
+        l1=lg.max()+0.5*CellRad
+        m0=mg.min()-0.5*CellRad
+        m1=mg.max()+0.5*CellRad
 
         Cl=((self.Cat.l>l0)&(self.Cat.l<l1))
         Cm=((self.Cat.m>m0)&(self.Cat.m<m1))
         CP=(self.Cat.PosteriorOK==1)
         ind=np.where(Cl&Cm&CP)[0]
 
-        N0=self.Cat.shape[0]
+        NN0=self.Cat.shape[0]
         self.Cat_s=self.Cat[ind]
         self.Cat_s=self.Cat_s.view(np.recarray)
-        N1=self.Cat_s.shape[0]
-        print>>log, "Selected %i objects [out of %i - that is %.3f%% of the main catalog]"%(N1,N0,100*float(N1)/N0)
         self.Cat_s.xCube=np.int32(np.around((self.Cat_s.l-lc)/CellRad))+NPix//2
         self.Cat_s.yCube=np.int32(np.around((self.Cat_s.m-mc)/CellRad))+NPix//2
+        
+        #print>>log,(self.Cat_s.xCube.max(),self.Cat_s.yCube.max())
+        #print>>log,(self.Cat_s.xCube.min(),self.Cat_s.yCube.min())
 
+        # Cx=((self.Cat_s.xCube>=0)&(self.Cat_s.xCube<NPix))
+        # Cy=((self.Cat_s.yCube>=0)&(self.Cat_s.yCube<NPix))
+        # ind=np.where(Cx&Cy)[0]
+        # self.Cat_s=self.Cat_s[ind]
+
+        # ##############################
+        nn=self.Cat_s.shape[0]
+        self.Cat_s=self.Cat_s[nn//10:nn//10+1]
+        n_zm=self.DicoDATA["DicoSelFunc"]["n_zm"]
+        self.Cat_s.Pzm.fill(0.)
+        for ID in range(self.Cat_s.shape[0]):
+            n,m=self.Cat_s.Pzm[ID].shape
+            self.Cat_s.Pzm[ID][n//5,m//3]=1.
+            self.Cat_s.n_zt[ID][:]=np.sum(self.Cat_s.Pzm[ID]*n_zm,axis=1)
+        # ##############################
+        
+        N1=self.Cat_s.shape[0]
+        print>>log, "Selected %i objects [out of %i - that is %.3f%% of the main catalog]"%(N1,NN0,100*float(N1)/NN0)
         
 def test(Show=True,NameOut="Test100kpc.fits"):
 
