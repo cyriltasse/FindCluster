@@ -50,7 +50,7 @@ class ClassGammaMachine():
         self.SliceFunction=self.giveSlice_Wave
         self.L_NParms=[]
         self.HasReferenceCube=False
-        self.setWaveType(Kind="haar")
+        #self.setWaveType(Kind="haar")
 
     def setWaveType(self,Kind="db10",Level=5,Th=1e-2,Mode='periodization'):
         # Type="bior1.3"
@@ -83,7 +83,7 @@ class ClassGammaMachine():
                 
                 abs_arr=np.abs(arr).flatten()
                 ind=np.where(abs_arr > self.Th*abs_arr.max())[0]
-                ind=np.where(abs_arr == abs_arr.max())[0]
+                #ind=np.where(abs_arr == abs_arr.max())[0]
                 NParms=ind.size
             else:
                 NParms=0
@@ -123,21 +123,21 @@ class ClassGammaMachine():
         return XOut
             
             
-    def PlotGammaCube(self,Cube=None,FigName="Gamma Cube"):
+    def PlotGammaCube(self,Cube=None,FigName="Gamma Cube",OutName=None):
         if Cube is None:
             Cube=self.GammaCube
         import pylab
-        pylab.figure(FigName)
+        fig=pylab.figure(FigName)
         pylab.clf()
         for iPlot in range(9):
             S=Cube[iPlot]
             pylab.subplot(3,3,iPlot+1)
-            pylab.imshow(S,interpolation="nearest")#,vmin=0.,vmax=2.)
+            pylab.imshow(S,interpolation="nearest",vmin=0.,vmax=10.)
             pylab.title("[%f - %f]"%(S.min(),S.max()))
         pylab.draw()
         pylab.show(False)
         pylab.pause(0.1)
-        
+        if OutName: fig.savefig(OutName)
 
     def computeGammaCube(self,X):
         LX=[]

@@ -164,9 +164,9 @@ class ClassOverdensityMap():
         self.fp=f,p
         self.CDELT=abs(self.MaskFits.header["CDELT1"])
 
-    def giveFracMasked(self,ra,dec,R):
+    def giveFracMasked(self,ra,dec,RDeg):
         xc,yc=self.RaDecToMaskPix(ra,dec)
-        Rpix=int(R/self.CDELT)
+        Rpix=int(RDeg/self.CDELT)
         ThisMask=self.MaskArray[0,0,xc-Rpix:xc+Rpix+1,yc-Rpix:yc+Rpix+1]
         x,y=np.mgrid[-Rpix:Rpix+1,-Rpix:Rpix+1]
         r=np.sqrt(x**2+y**2)

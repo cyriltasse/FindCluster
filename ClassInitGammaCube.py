@@ -13,22 +13,21 @@ from DDFacet.Other import AsyncProcessPool
 from DDFacet.Array import shared_dict
 
 
-
 class ClassInitGammaCube():
-    def __init__(self,LikeMachine,ScaleKpc=None):
-        self.LM=LikeMachine
+    def __init__(self,CM,GM,ScaleKpc=None):
         self.ScaleKpc=ScaleKpc
         if self.ScaleKpc is None:
             self.ScaleKpc=LikeMachine.ScaleKpc
         self.NScales=len(self.ScaleKpc)
-        self.CM=self.LM.CM
+        self.CM=CM
         self.zParms=self.CM.zg_Pars
         self.z_g=np.linspace(*self.zParms)
         self.NCPU=56
         self.logMParms=self.CM.logM_Pars
         self.logM_g=np.linspace(*self.logMParms)
-        self.GM=self.LM.MassFunction.GammaMachine
+        self.GM=GM
         self.lg,self.mg=self.GM.lg,self.GM.mg
+        self.rag,self.decg=self.GM.rag,self.GM.decg
         self.Mm=10**((self.logM_g[0:-1]+self.logM_g[1:])/2.)
         self.dlogM=self.logM_g[1::]-self.logM_g[0:-1]
 
@@ -45,12 +44,11 @@ class ClassInitGammaCube():
         GammaCube0=self.DicoCube["GammaCube0"]
         _,nz,nx,_=GammaCube0.shape
         for iScale in range(self.NScales):
-            for iz in range(nz):
-                for i in range(nx):
-                    for j in range(nx):
-                        APP.runJob("_estimateGammaAt:%i:%i:%i:%i"%(iScale,iz,i,j),
-                                   self._estimateGammaAt,
-                                   args=(iScale,iz,i,j))#,serial=True)
+            for i in range(nx):
+                for j in range(nx):
+                    APP.runJob("_estimateGammaAt:%i:%i:%i"%(iScale,i,j),
+                               self._estimateGammaAt,
+                               args=(iScale,i,j))#,serial=True)
                     #self.GammaCube0[iz,i,j]=self.estimateGammaAt(iz,i,j)
 
         APP.awaitJobResults("_estimateGammaAt:*", progress="Init Gamma Cube")
@@ -70,17 +68,62 @@ class ClassInitGammaCube():
                 wt=wt[r<3.*RadiusRad].flatten()
                 self.Theta[iScale,iz]=np.sum(wt)*dTheta**2
 
+    def computeEffectiveOmega(self):
+        _,_,nx,ny=self.DicoCube["GammaCube0"].shape
+        self.DicoCube["EffectiveOmega"]=np.zeros((self.NScales,self.GM.NSlice,nx,ny),np.float32)
+        _,nz,nx,ny=self.DicoCube["EffectiveOmega"].shape
+        for iScale in range(self.NScales):
+            for i in range(nx):
+                for j in range(nx):
+                    APP.runJob("_computeEffectiveOmegaAt:%i:%i:%i"%(iScale,i,j),
+                               self._computeEffectiveOmegaAt,
+                               args=(iScale,i,j))#,serial=True)
+                    #self.GammaCube0[iz,i,j]=self.estimateGammaAt(iz,i,j)
+
+        APP.awaitJobResults("_computeEffectiveOmegaAt:*", progress="Init Omega Cube")
+
     
-    def _estimateGammaAt(self,iScale,iz,i,j):
+    def _computeEffectiveOmegaAt(self,iScale,i,j):
+        self.DicoCube.reload()
+        
+        ra,dec=self.rag[i,j],self.decg[i,j]
+        xc,yc=self.CM.RaDecToMaskPix(ra,dec)
+        if self.CM.MaskArray[0,0,xc,yc]: return
+        
+        for iz in range(self.z_g.size-1):
+            z0,z1=self.z_g[iz],self.z_g[iz+1]
+            zm=(z0+z1)/2.
+            RadiusRad=self.ScaleKpc[iScale]*cosmo.arcsec_per_kpc_comoving(zm).to_value()/(3600.)*np.pi/180
+            self.DicoCube["EffectiveOmega"][iScale,iz,i,j]=self.CM.giveEffectiveOmega(self.rag[i,j],self.decg[i,j],RadiusRad)
+
+                
+    def _estimateGammaAt(self,iScale,i,j):
+        ra,dec=self.rag[i,j],self.decg[i,j]
+        xc,yc=self.CM.RaDecToMaskPix(ra,dec)
+        if self.CM.MaskArray[0,0,xc,yc]: return
+        for iz in range(self.z_g.size-1):
+            self._estimateGammaAtZ(iScale,iz,i,j)
+            
+    def _estimateGammaAtZ(self,iScale,iz,i,j):
+        self.DicoCube.reload()
+
         l0,m0=self.lg[i,j],self.mg[i,j]
         Cat=self.CM.Cat_s
-        l=Cat.l
-        m=Cat.m
+        Cat=self.CM.Cat
+        
+        # l=Cat.l
+        # m=Cat.m
+        
+        self.CM.DicoDATA_Shared.reload()
+        l=self.CM.DicoDATA_Shared["l"]
+        m=self.CM.DicoDATA_Shared["m"]
+        
         z=Cat.z
         z0,z1=self.z_g[iz],self.z_g[iz+1]
         zm=(z0+z1)/2.
+        
         RadiusRad=self.ScaleKpc[iScale]*cosmo.arcsec_per_kpc_comoving(zm).to_value()/(3600.)*np.pi/180
-
+        
         d=np.sqrt((l-l0)**2+(m-m0)**2)
         
         ind=np.where(d<3.*RadiusRad)[0]
@@ -92,16 +135,27 @@ class ClassInitGammaCube():
         ds=d[ind]
         w=np.exp(-ds**2/(2.*RadiusRad**2))
         #print C.Pzm.shape,np.sum(np.sum(C.Pzm,axis=-1),axis=-1)
-        Mt=np.sum(w.reshape(-1,1)*Cat.Pzm[:,iz,:])#*self.dlogM.reshape((1,-1)))
+        Mt=np.sum(w.reshape(-1,1)*C.Pzm[:,iz,:])#*self.dlogM.reshape((1,-1)))
         
         #Mt=ind.size
         #print self.CM.DicoDATA["DicoSelFunc"]["n_z"][iz]
         Theta=2*np.pi*(1.-np.cos(RadiusRad))
 
         
+        Omega0=self.Theta[iScale,iz]
+        # Omega1=self.CM.giveEffectiveOmega(self.rag[i,j],self.decg[i,j],RadiusRad)
+        Omega1=self.DicoCube["EffectiveOmega"][iScale,iz,i,j]
+        #print Omega1/Omega0
+        if Omega1/Omega0>0.3:
+            Mt_th=self.CM.DicoDATA["DicoSelFunc"]["n_z"][iz]*Omega1
+
+            # RDeg=RadiusRad*180/np.pi
+            # ff=self.CM.giveFracMasked(self.rag[i,j],self.decg[i,j],RDeg)
+
+
         
-        Mt_th=self.CM.DicoDATA["DicoSelFunc"]["n_z"][iz]*self.Theta[iScale,iz]
-
-        #print Mt,Mt_th
-        self.DicoCube["GammaCube0"][iScale,iz,i,j]=Mt/Mt_th
-
+            #print Mt,Mt_th
+            self.DicoCube["GammaCube0"][iScale,iz,i,j]=(Mt/Mt_th)#/ff
+        else:
+            self.DicoCube["GammaCube0"][iScale,iz,i,j]=0.
+            

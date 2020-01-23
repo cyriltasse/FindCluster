@@ -22,6 +22,7 @@ from DDFacet.Array import shared_dict
 import ClassCatalogMachine
 import ClassLikelihoodMachine
 import ClassInitGammaCube
+import ClassDisplayRGB
 
 def g_z(z):
     a=4.
@@ -51,7 +52,17 @@ class ClassRunMCMC():
         self.FOV=SubField["FOV"]
         self.CellDeg=SubField["CellDeg"]
         self.CellRad=self.CellDeg*np.pi/180
-        
+        # Type="bior1.3"
+        # Type="db10"
+        # Type="coif10"
+        # Type="sym2"
+        # Type="rbio1.3"
+        # Type="haar"
+        self.WaveDict={"Type":"haar",
+                       "Level":5}
+        # self.WaveDict={"Type":"db5",
+        #                "Level":3}
+
         #self.NPix=int(self.FOV/self.CellDeg)
         #self.NPix, _ = EstimateNpix(float(self.NPix), Padding=1)
         
@@ -88,7 +99,7 @@ class ClassRunMCMC():
         
 
         #self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CLM,ScaleKpc=[200.,500.])
-        self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CLM,ScaleKpc=[20.])
+        self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.CLM.MassFunction.GammaMachine,ScaleKpc=[500.])
         self.DicoChains = shared_dict.create("DicoChains")
         
 
@@ -114,25 +125,28 @@ class ClassRunMCMC():
         
         self.CubeInit=Cube.copy()
         self.DicoChains["CubeInit"]=self.CubeInit
-        self.CLM.MassFunction.GammaMachine.setWaveType(Kind="haar",Th=3e-2,Mode="symmetric")
+        self.CLM.MassFunction.GammaMachine.setWaveType(Kind=self.WaveDict["Type"],Th=3e-2,Mode="symmetric",Level=self.WaveDict["Level"])
         self.CLM.MassFunction.GammaMachine.setReferenceCube(self.DicoChains["CubeInit"])
 
-        #self.DicoChains["CubeInit"]=np.random.randn(*(self.DicoChains["CubeInit"].shape))*0.0001+1
-        self.CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=self.DicoChains["CubeInit"],FigName="Measured")
-        X=self.CLM.MassFunction.GammaMachine.CubeToVec(self.DicoChains["CubeInit"])
+        CubeInit=self.DicoChains["CubeInit"]
+        CubeInit=np.random.randn(*(self.DicoChains["CubeInit"].shape))*0.0001+1
+
+        
+        self.CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=CubeInit,FigName="Measured")
+        X=self.CLM.MassFunction.GammaMachine.CubeToVec(CubeInit)
         
         self.CLM.MassFunction.updateGammaCube(X)
         self.CLM.MassFunction.GammaMachine.PlotGammaCube()
 
         self.NDim=self.CLM.MassFunction.GammaMachine.NParms
-        self.NChain=10000#self.NDim*2
+        self.NChain=self.NDim*4
         self.InitDicoChains(X)
         
         
     def _setReferenceCube(self):
         if self.CLM.MassFunction.GammaMachine.HasReferenceCube: return
         self.CLM.MassFunction.GammaMachine.DoPrint=False
-        self.CLM.MassFunction.GammaMachine.setWaveType(Kind="haar",Th=3e-2,Mode="symmetric")
+        self.CLM.MassFunction.GammaMachine.setWaveType(Kind=self.WaveDict["Type"],Th=3e-2,Mode="symmetric",Level=self.WaveDict["Level"])
         self.CLM.MassFunction.GammaMachine.setReferenceCube(self.DicoChains["CubeInit"])
         
         
@@ -140,25 +154,27 @@ class ClassRunMCMC():
         print>>log,"Initialise Markov Chains..."
         STD=np.max([1e-3,np.std(XInit)])
         self.DicoChains["X"]=np.random.randn(self.NChain,self.NDim)*STD+XInit.reshape((1,-1))
+        self.DicoChains["ChainCube"]=np.zeros((self.NChain,self.NSlice,self.NPix,self.NPix),np.float32)
 
-        self.DicoChains["X"]=(10**(np.linspace(-10,10,self.NChain))).reshape((self.NChain,self.NDim))*XInit.reshape((1,-1))
+        #self.DicoChains["X"]=(10**(np.linspace(-1,4,self.NChain))).reshape((self.NChain,self.NDim))*XInit.reshape((1,-1))
 
         
-        self.DicoChains["L"]=np.zeros((self.NChain,4),np.float64)
+        self.DicoChains["L"]=np.zeros((self.NChain,),np.float64)
         
         for iChain in range(self.NChain):
             APP.runJob("_evalChain:%i"%(iChain), 
                        self._evalChain,
-                       args=(iChain,))
+                       args=(iChain,))#,serial=True)
         APP.awaitJobResults("_evalChain:*", progress="Compute L for init")
         self.DicoChains["Accepted"]=np.zeros((self.NChain,),int)
-        self.PlotL()
+        #self.PlotL()
 
     def PlotL(self):
         import pylab
         X=self.DicoChains["X"]
         Y=self.DicoChains["L"]
-        
+        L=self.DicoChains["L"][:,0]
+        print>>log,"max %f"%X[np.argmax(L)]
         pylab.clf()
         for i in range(4):
             pylab.subplot(2,2,i+1)
@@ -173,7 +189,6 @@ class ClassRunMCMC():
         self._setReferenceCube()
         x=self.DicoChains["X"][iChain]
         self.DicoChains["L"][iChain]=self.CLM.log_prob(x)
-        
 
         
 
@@ -238,7 +253,8 @@ class ClassRunMCMC():
         if dd>10.:
             pp=1.
         else:
-            pp=np.exp(L1-L0)
+            pp=np.exp(dd)
+            #pp=np.exp(L1-L0)
         p=np.min([1,pp])
         #print "   %f, %f --> %f"%(L1,L0,p)
         r=np.random.rand(1)[0]
@@ -246,6 +262,7 @@ class ClassRunMCMC():
             self.DicoChains["X"][iChain]=X2[:]
             self.DicoChains["L"][iChain]=L1
             self.DicoChains["Accepted"][iChain]=1
+            self.DicoChains["ChainCube"][iChain][...]=self.CLM.MassFunction.GammaMachine.GammaCube[...]
         else:
             self.DicoChains["Accepted"][iChain]=0
 
@@ -322,7 +339,7 @@ class ClassRunMCMC():
             for iChain in range(self.NChain):
                 APP.runJob("_evolveChain:%i"%(iChain), 
                            EvolveFunc,
-                           args=(iChain,Sigma),serial=True)
+                           args=(iChain,Sigma))#,serial=True)
             APP.awaitJobResults("_evolveChain:*", progress="Compute step %i"%iDone)
             ff=np.count_nonzero(self.Accepted)/float(self.Accepted.size)
             LAccepted.append(ff)
@@ -339,7 +356,7 @@ class ClassRunMCMC():
                     
             
             if iDone%10==0:
-                self.PlotChains2(OutName="Test%4.4i.png"%iDone)
+                self.PlotChains2(OutName="Test%6.6i.png"%iDone)
             iDone+=1
 
         
@@ -352,13 +369,12 @@ class ClassRunMCMC():
         #pylab.ion()
         self.DicoChains.reload()
         XMean=np.mean(self.DicoChains["X"],axis=0)
-        CubeMean=np.zeros_like(self.CubeInit)
-        for iChain in range(self.NChain):
-            self.CLM.MassFunction.updateGammaCube(self.DicoChains["X"][iChain])
-            CubeMean+=self.CLM.MassFunction.GammaMachine.GammaCube
-        CubeMean/=self.NChain
+        CubeMean=np.mean(self.DicoChains["ChainCube"],axis=0)
+        #CubeMean/=self.NChain
         
         self.CLM.MassFunction.updateGammaCube(XMean)
         #print CubeMean-self.CLM.MassFunction.GammaMachine.GammaCube
-        self.CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=CubeMean,FigName="Mean posterior")
+        self.CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=CubeMean,
+                                                         FigName="Mean posterior",
+                                                         OutName=OutName)
 

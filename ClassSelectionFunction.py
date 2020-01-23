@@ -95,7 +95,7 @@ class ClassSelectionFunction():
         return np.interp(logM, logMm, self.Selfunc[iz])
         
     def PlotSelectionFunction(self):
-        
+        return
         Phi=self.PhiMeasured
         Phi1=self.PhiMeasured1
         import pylab

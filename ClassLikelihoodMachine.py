@@ -84,8 +84,8 @@ class ClassLikelihoodMachine():
         APP.registerJobHandlers(self)
 
     def ComputeIndexCube(self,NPix):
-        #self.IndexCube=np.array([i*NPix**2+self.CM.Cat_s.yCube*NPix+self.CM.Cat_s.xCube for i in range(self.NSlice)]).flatten()
-        self.IndexCube=np.array([self.CM.Cat_s.yCube*NPix+self.CM.Cat_s.xCube]).flatten()
+        self.IndexCube=np.array([i*np.int64(NPix**2)+np.int64(self.CM.Cat_s.xCube*NPix)+np.int64(self.CM.Cat_s.yCube) for i in range(self.NSlice)]).flatten()
+        #self.IndexCube=np.array([self.CM.Cat_s.xCube*NPix+self.CM.Cat_s.yCube]).flatten()
         
         
     def log_prob(self, X):
@@ -93,7 +93,7 @@ class ClassLikelihoodMachine():
         T.disable()
         self.MassFunction.updateGammaCube(X)
         T.timeit("update cube")
-        Cell=(1./3600)*np.pi/180
+        Cell=(.001/3600)*np.pi/180
         # GammaCube=self.MassFunction.GammaMachine.GammaCube.copy()
         # for iz in range(self.NSlice):
         #     GammaCube[iz]=GammaCube[iz].T[::-1,:]
@@ -106,15 +106,14 @@ class ClassLikelihoodMachine():
         
         Ns=self.CM.Cat_s.shape[0]
         
-        #gamma_xz=GammaCube.flat[self.IndexCube].reshape((self.NSlice,Ns)).T
+        gamma_xz=GammaCube.flat[self.IndexCube].reshape((self.NSlice,Ns)).T
         
-        #gamma_xz=np.array([GammaCube[iz].flat[self.IndexCube] for iz in range(self.NSlice)]).reshape((self.NSlice,Ns)).T
-
-        gamma_xz=np.zeros((self.NSlice,Ns),np.float64)
-        for iS in range(self.CM.Cat_s.shape[0]):
-            gamma_xz[:,iS]=GammaCube[:,self.CM.Cat_s.xCube[iS],self.CM.Cat_s.yCube[iS]]
-            
-        gamma_xz=gamma_xz.T
+        # gamma_xz0=np.array([GammaCube[iz].flat[self.IndexCube] for iz in range(self.NSlice)]).reshape((self.NSlice,Ns)).T
+        # gamma_xz=np.zeros((self.NSlice,Ns),np.float64)
+        # for iS in range(self.CM.Cat_s.shape[0]):
+        #     gamma_xz[:,iS]=GammaCube[:,self.CM.Cat_s.xCube[iS],self.CM.Cat_s.yCube[iS]]
+        # gamma_xz=gamma_xz.T
+        
         T.timeit("gamma_xz")
 
         # gamma_xz2=np.zeros_like(GammaCube)
@@ -128,12 +127,21 @@ class ClassLikelihoodMachine():
         
         Nx_Omega1=np.sum(gamma_xz*n_z.reshape((1,-1)))*Cell**2
         T.timeit("Nx_Omega1")
+
+        # S0=np.sum(gamma_xz*self.CM.Cat_s.n_zt*Cell**2,axis=1)
+        # S0[S0<=0]=1e-100
+        # Nx1_Omega1=np.sum(np.log(S0))
+
+
         S0=np.sum(gamma_xz*self.CM.Cat_s.n_zt*Cell**2,axis=1)
         S0[S0<=0]=1e-100
         Nx1_Omega1=np.sum(np.log(S0))
+
+
         T.timeit("Nx1_Omega1")
         L=-np.float64(Nx_Omega0)+np.float64(Nx_Omega1)+np.float64(Nx1_Omega1)
 
+        return L
         return L,-Nx_Omega0,Nx_Omega1,Nx1_Omega1
 
         

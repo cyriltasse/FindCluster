@@ -31,6 +31,7 @@ import os
 import FieldsToFiles
 import ClassProbDensityMachine
 import ClassSelectionFunction
+from DDFacet.Array import shared_dict
 
 def AngDist(ra0,dec0,ra1,dec1):
     AC=np.arccos
@@ -46,7 +47,7 @@ def AngDist(ra0,dec0,ra1,dec1):
     return AC(D)
 
 class ClassCatalogMachine():
-    def __init__(self,zg_Pars=[0.1,1.5,10],logM_Pars=[8.,12.,13]):
+    def __init__(self,zg_Pars=[0.1,2.5,25],logM_Pars=[8.,12.,13]):
         self.MaskFits=None
         self.DicoDATA={}
         self.PhysCat=None
@@ -55,7 +56,7 @@ class ClassCatalogMachine():
         self.logM_Pars=logM_Pars
         self.DicoDATA["logM_Pars"]=self.logM_Pars
         self.DicoDATA["zg_Pars"]=self.zg_Pars
-
+        self.DicoDATA_Shared=None
 
     def Init(self,Show=False,FieldName="EN1",ForceLoad=False):
         if FieldName=="EN1":
@@ -78,7 +79,9 @@ class ClassCatalogMachine():
             self.PDM.compute_n_zt()
             
             self.PickleSave(DicoDataNames["PickleSave"])
-
+        self.RA_orig,self.DEC_orig=self.Cat.RA.copy(),self.Cat.DEC.copy()
+        self.coordToShared()
+        
     def ComputeLM(self):
         print>>log,"Compute (ra,dec)->(l,m)..."
         ra,dec=self.Cat.RA,self.Cat.DEC
@@ -93,6 +96,47 @@ class ClassCatalogMachine():
         # y=np.int32(np.around(m/self.CellRad))+self.NPix//2
         # x,y=self.give_xy(ra,dec)
 
+    def randomiseCatalog(self):
+        RA,DEC=self.RA_orig,self.DEC_orig
+        ra0,ra1=RA.min(),RA.max()
+        dec0,dec1=DEC.min(),DEC.max()
+        ram=RA
+        decm=DEC
+        ras=np.array([],np.float32)
+        decs=np.array([],np.float32)
+        print>>log,"Generating randomised catalog..."
+        while True:
+            ra=ra0+np.random.rand(ram.size)*(ra1-ra0)
+            dec=dec0+np.random.rand(decm.size)*(dec1-dec0)
+            #print ram.size
+            FLAGMASK=np.bool8(np.array([self.GiveMaskFlag(ra[iS],dec[iS]) for iS in range(ra.size)]))
+            #print "f"
+            if FLAGMASK.any():
+                ras=np.concatenate([ras,ra[FLAGMASK]])
+                decs=np.concatenate([decs,dec[FLAGMASK]])
+            if (FLAGMASK==0).any():
+                ram=ra[FLAGMASK==0]
+                decm=dec[FLAGMASK==0]
+            else:
+                break
+            
+            
+        self.Cat.RA[:]=ras.flat[:]
+        self.Cat.DEC[:]=decs.flat[:]
+
+        self.ComputeLM()
+        
+        print>>log,"  done..."
+
+    def coordToShared(self):
+        print>>log, "Putting coordinates in shared array..."
+        if not self.DicoDATA_Shared:
+            self.DicoDATA_Shared = shared_dict.create("DATA_Shared")
+        self.DicoDATA_Shared["RA"]=self.Cat.RA[:]
+        self.DicoDATA_Shared["DEC"]=self.Cat.DEC[:]
+        self.DicoDATA_Shared["l"]=self.Cat.l[:]
+        self.DicoDATA_Shared["m"]=self.Cat.m[:]
+    
         
     def ComputeSelFunc(self):
         print>>log,"Computig selection function..."
@@ -267,7 +311,7 @@ class ClassCatalogMachine():
         #self.PhysCat=self.DicoDATA["PhysCat"].view(np.recarray)
         self.OmegaTotal=self.DicoDATA["OmegaTotal"]
         self.setMask(self.DicoDATA["FileNames"]["MaskFitsName"])
-    
+        
     def RaDecToMaskPix(self,ra,dec):
         if abs(ra)>2*np.pi: stop
         if abs(dec)>2*np.pi: stop
@@ -276,6 +320,69 @@ class ClassCatalogMachine():
         xc,yc=int(xc),int(yc)
         return xc,yc
         
+    def giveEffectiveOmega(self,ra,dec,WtRadiusRad):
+        xc,yc=self.RaDecToMaskPix(ra,dec)
+        WtRDeg=WtRadiusRad*180/np.pi
+        WtRpix3Sig=int(3*WtRDeg/self.CDELT)
+
+        x0,x1=xc-WtRpix3Sig,xc+WtRpix3Sig+1
+        y0,y1=yc-WtRpix3Sig,yc+WtRpix3Sig+1
+        ThisMask=np.bool8(self.MaskArray[0,0,x0:x1,y0:y1]).copy()
+        nx,ny=ThisMask.shape
+        CDeltRad=self.CDELT*np.pi/180
+        dx,dy=np.mgrid[-3*WtRadiusRad:3*WtRadiusRad:1j*nx,-3*WtRadiusRad:3*WtRadiusRad:1j*ny]
+        r=np.sqrt(dx**2+dy**2)
+        wt=np.exp(-r**2/(2.*WtRadiusRad**2))
+        wt[ThisMask]=0
+        
+        wt=wt[r<3.*WtRadiusRad].flatten()
+        
+        
+        return np.sum(wt)*CDeltRad**2
+
+
+        
+    def giveFracMasked(self,ra,dec,R):
+        xc,yc=self.RaDecToMaskPix(ra,dec)
+        Rpix=int(R/self.CDELT)
+
+        
+        # x0,x1=xc-Rpix,xc+Rpix+1
+        # y0,y1=yc-Rpix,yc+Rpix+1
+        
+        # _,_,nx,ny=self.MaskArray.shape
+        # x0=np.max([0,x0])
+        # y0=np.max([0,y0])
+        # x1=np.min([nx,x0])
+        # y1=np.min([ny,y0])
+        # print "============="
+        # print x0,x1,nx
+        # print y0,y1,ny
+
+        
+        
+        ThisMask=(self.MaskArray[0,0,xc-Rpix:xc+Rpix+1,yc-Rpix:yc+Rpix+1]).copy()
+        x,y=np.mgrid[-Rpix:Rpix+1,-Rpix:Rpix+1]
+        r=np.sqrt(x**2+y**2)
+        ThisMask[r>Rpix]=-1
+        UsedArea_pix=(np.where(ThisMask==0)[0]).size
+        Area_pix=(np.where(ThisMask!=-1)[0]).size
+        if Area_pix!=0:
+            frac=UsedArea_pix/float(Area_pix)
+        else:
+            frac=1.
+        
+        if frac==0: frac=-1.
+        if frac<0.5: frac=-1
+        # pylab.clf()
+        # pylab.imshow(ThisMask,interpolation="nearest")
+        # pylab.draw()
+        # pylab.show(False)
+        # pylab.pause(0.1)
+        # #stop
+        # print frac
+        return frac
+
     def GiveMaskFlag(self,ra,dec):
         xc,yc=self.RaDecToMaskPix(ra,dec)
         FLAG=self.MaskArray[0,0,xc,yc]
@@ -337,16 +444,16 @@ class ClassCatalogMachine():
         # ind=np.where(Cx&Cy)[0]
         # self.Cat_s=self.Cat_s[ind]
 
-        # ##############################
-        nn=self.Cat_s.shape[0]
-        self.Cat_s=self.Cat_s[nn//10:nn//10+1]
-        n_zm=self.DicoDATA["DicoSelFunc"]["n_zm"]
-        self.Cat_s.Pzm.fill(0.)
-        for ID in range(self.Cat_s.shape[0]):
-            n,m=self.Cat_s.Pzm[ID].shape
-            self.Cat_s.Pzm[ID][n//5,m//3]=1.
-            self.Cat_s.n_zt[ID][:]=np.sum(self.Cat_s.Pzm[ID]*n_zm,axis=1)
-        # ##############################
+        # # ##############################
+        # nn=self.Cat_s.shape[0]
+        # self.Cat_s=self.Cat_s[nn//10:nn//10+1]
+        # n_zm=self.DicoDATA["DicoSelFunc"]["n_zm"]
+        # self.Cat_s.Pzm.fill(0.)
+        # for ID in range(self.Cat_s.shape[0]):
+        #     n,m=self.Cat_s.Pzm[ID].shape
+        #     self.Cat_s.Pzm[ID][n//5,m//3]=1.
+        #     self.Cat_s.n_zt[ID][:]=np.sum(self.Cat_s.Pzm[ID]*n_zm,axis=1)
+        # # ##############################
         
         N1=self.Cat_s.shape[0]
         print>>log, "Selected %i objects [out of %i - that is %.3f%% of the main catalog]"%(N1,NN0,100*float(N1)/NN0)
