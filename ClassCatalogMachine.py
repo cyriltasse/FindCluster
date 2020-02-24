@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 import numpy as np
 import pylab
 import tables
@@ -14,10 +17,7 @@ log = logger.getLogger("ClassCatalogMachine")
 from DDFacet.Other import ModColor
 from DDFacet.Other.progressbar import ProgressBar
 #from DDFacet.Other import AsyncProcessPool
-import ClassDisplayRGB
-import ClassSaveFITS
 from DDFacet.ToolsDir import ModCoord
-import RecArrayOps
 from DDFacet.Other import MyPickle
 import os
 # # ##############################
@@ -74,7 +74,7 @@ class ClassCatalogMachine():
             N0=self.Cat.shape[0]
             self.Cat=self.Cat[self.Cat.PosteriorOK==1]
             N1=self.Cat.shape[0]
-            print>>log,"  have kept %.4f%% of objects (others have bad fit?)"%(100*float(N1)/N0)
+            log.print("  have kept %.4f%% of objects (others have bad fit?)"%(100*float(N1)/N0))
             self.ComputeSelFunc()
             self.PDM.compute_n_zt()
             
@@ -83,7 +83,7 @@ class ClassCatalogMachine():
         self.coordToShared()
         
     def ComputeLM(self):
-        print>>log,"Compute (ra,dec)->(l,m)..."
+        log.print("Compute (ra,dec)->(l,m)...")
         ra,dec=self.Cat.RA,self.Cat.DEC
         if type(ra) is not np.ndarray:
             ra=np.array([ra])
@@ -104,7 +104,7 @@ class ClassCatalogMachine():
         decm=DEC
         ras=np.array([],np.float32)
         decs=np.array([],np.float32)
-        print>>log,"Generating randomised catalog..."
+        log.print("Generating randomised catalog...")
         while True:
             ra=ra0+np.random.rand(ram.size)*(ra1-ra0)
             dec=dec0+np.random.rand(decm.size)*(dec1-dec0)
@@ -126,10 +126,10 @@ class ClassCatalogMachine():
 
         self.ComputeLM()
         
-        print>>log,"  done..."
+        log.print("  done...")
 
     def coordToShared(self):
-        print>>log, "Putting coordinates in shared array..."
+        log.print( "Putting coordinates in shared array...")
         if not self.DicoDATA_Shared:
             self.DicoDATA_Shared = shared_dict.create("DATA_Shared")
         self.DicoDATA_Shared["RA"]=self.Cat.RA[:]
@@ -139,7 +139,7 @@ class ClassCatalogMachine():
     
         
     def ComputeSelFunc(self):
-        print>>log,"Computig selection function..."
+        log.print("Computig selection function...")
         CSF=ClassSelectionFunction.ClassSelectionFunction(self)
         CSF.ComputeMassFunction()
         CSF.PlotSelectionFunction()
@@ -152,7 +152,7 @@ class ClassCatalogMachine():
 
         
     def setPz(self,PzFile):
-        print>>log,"Opening p-z hdf5 file: %s"%PzFile
+        log.print("Opening p-z hdf5 file: %s"%PzFile)
         H=tables.open_file(PzFile)
         self.DicoDATA["zgrid_pz"]=H.root.zgrid[:].copy()
         self.DicoDATA["pz"]=H.root.Pz[:].copy()
@@ -160,7 +160,7 @@ class ClassCatalogMachine():
         
     def setPhysCatalog(self,CatName):
         self.PhysCatName=CatName
-        print>>log,"Opening mass/sfr catalog fits file: %s"%CatName
+        log.print("Opening mass/sfr catalog fits file: %s"%CatName)
         self.PhysCat=fitsio.open(CatName)[1].data
         self.PhysCat=self.PhysCat.view(np.recarray)
 
@@ -169,13 +169,13 @@ class ClassCatalogMachine():
         
 
     def setCat(self,CatName):
-        print>>log,"Opening catalog fits file: %s"%CatName
+        log.print("Opening catalog fits file: %s"%CatName)
         self.PhotoCatName=CatName
         self.PhotoCat=pyfits.open(CatName)[1].data
         self.PhotoCat=self.PhotoCat.view(np.recarray)
 
         if self.PhysCat is not  None:
-            print>>log,"  Create augmented photocat ..."
+            log.print("  Create augmented photocat ...")
             dID=self.PhotoCat.id[1::]-self.PhotoCat.id[0:-1]
             if np.max(dID)!=1: stop
             FIELDS=self.PhotoCat.dtype.descr+self.PhysCat.dtype.descr
@@ -188,22 +188,22 @@ class ClassCatalogMachine():
             FIELDS+=[("xCube",np.int16),("yCube",np.int16)]
             FIELDS+=[("PosteriorOK",np.bool)]
             PhotoCat=np.zeros((self.PhotoCat.shape[0],),dtype=FIELDS)
-            print>>log,"  Copy photo fields ..."
+            log.print("  Copy photo fields ...")
             for field in self.PhotoCat.dtype.fields.keys():
                 PhotoCat[field][:]=self.PhotoCat[field][:]
             ID=self.PhysCat["ID"][:]
-            print>>log,"  Copy phys fields ..."
+            log.print("  Copy phys fields ...")
             for field in self.PhysCat.dtype.fields.keys():
                 PhotoCat[field][ID]=self.PhysCat[field][:]
 
-            print>>log,"  Copy p(z) ..."
+            log.print("  Copy p(z) ...")
             PhotoCat["pz"][:,:]=self.DicoDATA["pz"][:,:]
             del(self.DicoDATA["pz"])
             self.Cat=PhotoCat
             self.Cat=self.Cat.view(np.recarray)
             
         # if self.PhysCat is not  None:
-        #     print>>log,"  Append fields..."
+        #     log.print("  Append fields...")
         #     dID=self.PhotoCat.id[1::]-self.PhotoCat.id[0:-1]
         #     if np.max(dID)!=1: stop
         #     self.PhotoCat=RecArrayOps.AppendField(self.PhotoCat,("IDPhys",np.int32))
@@ -212,7 +212,7 @@ class ClassCatalogMachine():
             
         
         # if self.PhysCat is not  None:
-        #     print>>log,"  Append fields..."
+        #     log.print("  Append fields...")
         #     self.Cat=RecArrayOps.AppendField(self.Cat,("Mass",np.float32))
         #     self.Cat=RecArrayOps.AppendField(self.Cat,("SFR",np.float32))
         #     self.Cat=RecArrayOps.AppendField(self.Cat,("z",np.float32))
@@ -221,7 +221,7 @@ class ClassCatalogMachine():
         #     self.Cat.z.fill(-1)
         #     dID=self.Cat.id[1::]-self.Cat.id[0:-1]
         #     if np.max(dID)!=1: stop
-        #     print>>log,"  Append physical information to photometric catalog..."
+        #     log.print("  Append physical information to photometric catalog...")
         #     self.Cat.Mass[self.PhysCat.ID]=self.PhysCat.Mass_median[:]  
         #     self.Cat.SFR[self.PhysCat.ID]=self.PhysCat.SFR_best[:]
         #     self.Cat.z[self.PhysCat.ID]=self.PhysCat.z[:]
@@ -230,7 +230,7 @@ class ClassCatalogMachine():
           
         #self.CatRange=np.arange(self.Cat.FLAG_CLEAN.size)
             
-        print>>log,"Remove spurious objects..."
+        log.print("Remove spurious objects...")
         ind=np.where((self.Cat.FLAG_CLEAN == 1)&
                      (self.Cat.i_fluxerr > 0)&
                      (self.Cat.K_flux > 0)&
@@ -266,12 +266,12 @@ class ClassCatalogMachine():
         # MASS.fill(1.)
         
         if self.MaskFits:
-            print>>log, "Flagging in-mask sources..."
+            log.print( "Flagging in-mask sources...")
             FLAGMASK=np.bool8(np.array([self.GiveMaskFlag(RA[iS],DEC[iS]) for iS in range(self.Cat.RA.size)]))
             #FLAGMASK.fill(1)
             self.Cat=self.Cat[FLAGMASK]
             #self.CatRange=self.CatRange[FLAGMASK]
-            print>>log, "  done ..."
+            log.print( "  done ...")
             
         # ind=np.where(self.Cat.IDPhys!=-1)[0]
         # self.Cat=self.Cat[ind]
@@ -294,7 +294,7 @@ class ClassCatalogMachine():
 
         
     def PickleSave(self,FileName):
-        print>>log, "Saving catalog as: %s"%FileName
+        log.print( "Saving catalog as: %s"%FileName)
         FileNames={"MaskFitsName":self.MaskFitsName,
                   "PhotoCatName":self.PhotoCatName,
                   "PhysCatName":self.PhysCatName}
@@ -304,7 +304,7 @@ class ClassCatalogMachine():
         MyPickle.DicoNPToFile(self.DicoDATA,FileName)
         
     def PickleLoad(self,FileName):
-        print>>log, "Loading catalog from: %s"%FileName
+        log.print( "Loading catalog from: %s"%FileName)
         self.DicoDATA=MyPickle.FileToDicoNP(FileName)
         self.Cat=self.DicoDATA["Cat"].view(np.recarray)
         #self.CatRange=self.DicoDATA["CatRange"]
@@ -389,7 +389,7 @@ class ClassCatalogMachine():
         return 1-FLAG
     
     def setMask(self,MaskImage):
-        print>>log,"Opening mask image: %s"%MaskImage
+        log.print("Opening mask image: %s"%MaskImage)
         self.MaskFitsName=MaskImage
         self.MaskFits=pyfits.open(MaskImage)[0]
         self.MaskArray=self.MaskFits.data
@@ -408,18 +408,18 @@ class ClassCatalogMachine():
             self.OmegaTotal=NPixZero*(self.CDELT*np.pi/180)**2
             
     def cutCat(self,rac,decc,NPix,CellRad):
-        print>>log,"Selection objects in window..."
+        log.print("Selection objects in window...")
         lc,mc=self.CoordMachine.radec2lm(rac,decc)
         # r=((NPix//2)+0.5)*CellRad
         # l0,l1=lc-r,lc+r
         # m0,m1=mc-r,mc+r
-        #print>>log, (lc,mc)
+        #log.print( (lc,mc))
 
         N0=(NPix)//2
         N1=NPix-1-N0
-        #print>>log,(N0,N1)
+        #log.print((N0,N1))
         lg,mg=np.mgrid[-N0*CellRad+lc:N1*CellRad+lc:1j*NPix,-N0*CellRad+mc:N1*CellRad+mc:1j*NPix]
-        #print>>log,(np.mgrid[-N0:N1:1j*NPix])
+        #log.print((np.mgrid[-N0:N1:1j*NPix]))
         l0=lg.min()-0.5*CellRad
         l1=lg.max()+0.5*CellRad
         m0=mg.min()-0.5*CellRad
@@ -436,8 +436,8 @@ class ClassCatalogMachine():
         self.Cat_s.xCube=np.int32(np.around((self.Cat_s.l-lc)/CellRad))+NPix//2
         self.Cat_s.yCube=np.int32(np.around((self.Cat_s.m-mc)/CellRad))+NPix//2
         
-        #print>>log,(self.Cat_s.xCube.max(),self.Cat_s.yCube.max())
-        #print>>log,(self.Cat_s.xCube.min(),self.Cat_s.yCube.min())
+        #log.print((self.Cat_s.xCube.max(),self.Cat_s.yCube.max()))
+        #log.print((self.Cat_s.xCube.min(),self.Cat_s.yCube.min()))
 
         # Cx=((self.Cat_s.xCube>=0)&(self.Cat_s.xCube<NPix))
         # Cy=((self.Cat_s.yCube>=0)&(self.Cat_s.yCube<NPix))
@@ -456,7 +456,7 @@ class ClassCatalogMachine():
         # # ##############################
         
         N1=self.Cat_s.shape[0]
-        print>>log, "Selected %i objects [out of %i - that is %.3f%% of the main catalog]"%(N1,NN0,100*float(N1)/NN0)
+        log.print( "Selected %i objects [out of %i - that is %.3f%% of the main catalog]"%(N1,NN0,100*float(N1)/NN0))
         
 def test(Show=True,NameOut="Test100kpc.fits"):
 
@@ -487,8 +487,8 @@ def test(Show=True,NameOut="Test100kpc.fits"):
 #     try:
 #         test()
 #     except Exception,e:
-#         print>>log, "Got an exception... : %s"%str(e)    
-#         print>>log, "killing workers..."
+#         log.print( "Got an exception... : %s"%str(e)    )
+#         log.print( "killing workers...")
 #         APP.terminate()
 #         APP.shutdown()
 #         Multiprocessing.cleanupShm()

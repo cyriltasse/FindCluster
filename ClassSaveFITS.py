@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import os
 import os.path
@@ -71,7 +74,7 @@ class ClassSaveFITS():
             self.header['RESTFRQ'] = self.fmean
 
     def setdata(self, dataIn,CorrT=False):
-        #print>>log, "  ----> put data in casa image %s"%self.ImageName
+        #log.print( "  ----> put data in casa image %s"%self.ImageName)
 
         data=dataIn.copy()
         if CorrT:
@@ -88,14 +91,14 @@ class ClassSaveFITS():
         hdu = fits.PrimaryHDU(header=self.header,data=self.data)
         if os.path.exists(FileOut):
             os.unlink(FileOut)
-        print>>log, "  ----> Save image data as FITS file %s"%FileOut
+        log.print( "  ----> Save image data as FITS file %s"%FileOut)
         hdu.writeto(FileOut)
 
     def close(self):
-        #print>>log, "  ----> Closing %s"%self.ImageName
+        #log.print( "  ----> Closing %s"%self.ImageName)
         del(self.data)
         del(self.header)
-        #print>>log, "  ----> Closed %s"%self.ImageName
+        #log.print( "  ----> Closed %s"%self.ImageName)
 
 
 def test():

@@ -14,10 +14,11 @@ log = logger.getLogger("RunMCMC")
 
 from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 from DDFacet.Other import Multiprocessing
+from DDFacet.Other import AsyncProcessPool
+
 from DDFacet.Other import ModColor
 from DDFacet.Other import ClassTimeIt
 from DDFacet.Other.progressbar import ProgressBar
-from DDFacet.Other import AsyncProcessPool
 from DDFacet.Array import shared_dict
 import ClassCatalogMachine
 import ClassLikelihoodMachine

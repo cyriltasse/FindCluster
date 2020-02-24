@@ -1,14 +1,15 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
 from multiprocessing import Pool
 #import emcee
 import numpy as np
 import matplotlib.pyplot as plt
-import GeneDist
-import ClassSimulCatalog
 import matplotlib.pyplot as pylab
-import ClassMassFunction
 from astropy.cosmology import WMAP9 as cosmo
 from DDFacet.Other import logger
 log = logger.getLogger("RunMCMC")
@@ -20,11 +21,11 @@ from DDFacet.Other.progressbar import ProgressBar
 from DDFacet.Other import AsyncProcessPool
 from DDFacet.Array import shared_dict
 import ClassCatalogMachine
-import ClassLikelihoodMachine
 import ClassInitGammaCube
 import ClassGammaMachine_Wave
 import ClassDisplayRGB
 import ClassSaveFITS
+import GeneDist
 
 def read_options():
     desc="""Questions and suggestions: cyril.tasse@obspm.fr"""
@@ -82,7 +83,7 @@ class ClassMakeDensityImage():
         if (self.NPix%2)!=0:
             self.NPix+=1
             
-        print>>log,"Choosing NPix=%i"%self.NPix
+        log.print("Choosing NPix=%i"%self.NPix)
 
         self.CM.cutCat(self.rac,self.decc,self.NPix,self.CellRad)
         self.zParms=self.CM.zg_Pars
@@ -127,7 +128,7 @@ class ClassMakeDensityImage():
             pylab.draw()
 
     def killWorkers(self):
-        print>>log, "Killing workers"
+        log.print( "Killing workers")
         APP.terminate()
         APP.shutdown()
         Multiprocessing.cleanupShm()

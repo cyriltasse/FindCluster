@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 from astropy.cosmology import WMAP9 as cosmo
 import numpy as np
 import scipy.signal
@@ -40,7 +43,7 @@ class ClassInitGammaCube():
         
 
     def InitGammaCube(self):
-        print>>log,"Initialise the Gamma cube..."
+        log.print("Initialise the Gamma cube...")
         GammaCube0=self.DicoCube["GammaCube0"]
         _,nz,nx,_=GammaCube0.shape
         for iScale in range(self.NScales):

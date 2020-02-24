@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 
 from astropy.cosmology import WMAP9 as cosmo
@@ -33,17 +36,17 @@ class ClassGammaMachine():
 
         self.CoordMachine = ModCoord.ClassCoordConv(self.rac_main, self.decc_main)
         l0,m0=self.CoordMachine.radec2lm(self.rac, self.decc)
-        #print>>log, (l0,m0)
+        #log.print( (l0,m0))
         N0=(NPix)//2
         N1=NPix-1-N0
         self.N0N1=(N0,N1)
-        #print>>log, (N0,N1)
+        #log.print( (N0,N1))
         lg,mg=np.mgrid[-N0*self.CellRad+l0:N1*self.CellRad+l0:1j*self.NPix,-N0*self.CellRad+m0:N1*self.CellRad+m0:1j*self.NPix]
         rag,decg=self.CoordMachine.lm2radec(lg.flatten(),mg.flatten())
         self.rag=rag.reshape(lg.shape)
         self.decg=decg.reshape(lg.shape)
         self.lg,self.mg=lg,mg
-        #print>>log, (np.mgrid[-N0:N1:1j*self.NPix])
+        #log.print( (np.mgrid[-N0:N1:1j*self.NPix]))
 
         self.GammaCube=None
         self.NSlice=self.zg.size-1
@@ -63,7 +66,7 @@ class ClassGammaMachine():
         self.Mode=Mode
         self.Level=Level
         self.Th=Th
-        if self.DoPrint: print>>log,"Using wavelet kind %s [level=%i] with a threshold of %f"%(Kind,Level,Th)
+        if self.DoPrint: log.print("Using wavelet kind %s [level=%i] with a threshold of %f"%(Kind,Level,Th))
 
     def setReferenceCube(self,Cube):
         level=7
@@ -94,11 +97,11 @@ class ClassGammaMachine():
             self.L_Ind.append(ind)
             self.L_Slice.append(slices)
             self.L_arrShape.append(arr.shape)
-            if self.DoPrint: print>>log,"  -- Slice #%i zm=%.2f [z=%.2f -> z=%.2f]: %i parameters"%(iSlice,zm,z0,z1,NParms)
+            if self.DoPrint: log.print("  -- Slice #%i zm=%.2f [z=%.2f -> z=%.2f]: %i parameters"%(iSlice,zm,z0,z1,NParms))
         self.HasReferenceCube=True
             
         self.NParms=np.sum(self.L_NParms)
-        if self.DoPrint: print>>log,"Total number of free parameters: %i"%self.NParms
+        if self.DoPrint: log.print("Total number of free parameters: %i"%self.NParms)
 
 
     def CubeToVec(self,Cube):

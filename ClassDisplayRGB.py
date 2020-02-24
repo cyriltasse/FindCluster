@@ -1,4 +1,7 @@
-import CutImage
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+import  CutImage
 import numpy as np
 import pylab
 import os
@@ -128,7 +131,7 @@ class ClassDisplayRGB():
                      extent=[l0[0],l1[0],m0[0],m1[0]])
         pylab.draw()
         if NamePNG:
-            print>>log,"Saving image as: %s"%NamePNG
+            log.print("Saving image as: %s"%NamePNG)
             fig.savefig(NamePNG)
         pylab.show(False)
         pylab.pause(0.1)

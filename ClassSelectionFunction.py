@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import numpy as np
 from astropy.cosmology import WMAP9 as cosmo
@@ -25,7 +28,7 @@ class ClassSelectionFunction():
         self.zg=np.linspace(*self.CM.zg_Pars)
         self.logM_g=np.linspace(*self.CM.logM_Pars)
         if "DicoSelFunc" in CM.DicoDATA.keys():
-            print>>log,"Getting precomputed selection function..."
+            log.print("Getting precomputed selection function...")
             self.DicoSelFunc=CM.DicoDATA["DicoSelFunc"]
             
         self.ModelMassFunc=ClassMassFunction.ClassMassFunction()
@@ -74,12 +77,12 @@ class ClassSelectionFunction():
 
         
         # FileName="%s.SelFunc.Dico"%self.CM.DicoDATA["FileNames"]['PhysCatName']
-        # print>>log,"Saving selection function as: %s"%FileName
+        # log.print("Saving selection function as: %s"%FileName)
         # MyPickle.DicoNPToFile(self.DicoSelFunc,FileName)
 
     def setSelectionFunction(self,FileName=None,DicoSelFunc=None):
         if FileName is not None:
-            print>>log,"Loading selection function: %s"%FileName
+            log.print("Loading selection function: %s"%FileName)
             self.DicoSelFunc=MyPickle.FileToDicoNP(FileName)
         elif Dico is not None:
             self.DicoSelFunc=DicoSelFunc

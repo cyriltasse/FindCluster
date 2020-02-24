@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 import numpy as np
 import pylab
 from scipy import ndimage
@@ -73,7 +76,7 @@ class ClassProbDensityMachine():
         #     ind=np.where()
         
     def computePDF_All(self):
-        print>>log,"Compute rebined p(z,m)..."
+        log.print("Compute rebined p(z,m)...")
         
         indkeep=np.zeros((self.CM.Cat.shape[0],),dtype=np.bool8)
         for ID in range(self.CM.Cat.shape[0]):
@@ -86,7 +89,7 @@ class ClassProbDensityMachine():
 
 
     def compute_n_zt(self):
-        print>>log,"Compute n_zt..."
+        log.print("Compute n_zt...")
         n_zm=self.CM.DicoDATA["DicoSelFunc"]["n_zm"]
         for ID in range(self.CM.Cat.shape[0]):
             self.CM.Cat.n_zt[ID][:]=np.sum(self.CM.Cat.Pzm[ID]*n_zm,axis=1)

@@ -1,5 +1,6 @@
 #import ClassGammaMachine_FFT as ClassGammaMachine
-import ClassGammaMachine_Wave as ClassGammaMachine
+#import ClassGammaMachine_Wave as ClassGammaMachine
+import ClassGammaMachine_Cov as ClassGammaMachine
 from astropy.cosmology import WMAP9 as cosmo
 import numpy as np
 from DDFacet.Other import ClassTimeIt
@@ -114,7 +115,10 @@ class ClassMassFunction():
         Phi=Phi_s(z) * np.log(10) * (10**(M-M_s(z)))**(1+alpha_s(z)) * np.exp(-10**(M-M_s(z)))
         return Phi#/H**3
 
-    def give_N(self,(ra,dec),(z0,z1),(logM0,logM1),OmegaSr):
+    def give_N(self,radec,z0z1,logM0logM1,OmegaSr):
+        (ra,dec)=(radec)
+        (z0,z1)=(z0z1)
+        (logM0,logM1)=(logM0logM1)
         # print ra,dec
         zm=(z0+z1)/2.
         dz=z1-z0
