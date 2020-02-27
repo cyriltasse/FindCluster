@@ -54,7 +54,8 @@ class ClassCovMatrix():
         log.print("Choosing k=%i [M=%i]"%(k,M))
         self.k=k
         Us,ss,Vs=scipy.sparse.linalg.svds(Cs,k=k)
-        log.print("  log Singular value Max/Min: %5.2f"%(np.log10(ss.max()/ss.min())))
+        sss=ss[ss>0]
+        log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
         ssqs=np.sqrt(ss)
         sqrtCs =Us*ssqs.reshape(1,ssqs.size)
         self.sqrtCs=sqrtCs

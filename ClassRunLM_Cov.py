@@ -38,7 +38,8 @@ def test(ComputeInitCube=False):
               "decc_deg":decc_deg,
               "FOV":FOV,
               "CellDeg":0.001}
-    LMMachine=ClassRunLM_Cov(SubField,ComputeInitCube=ComputeInitCube)
+    LMMachine=ClassRunLM_Cov(SubField,
+                             ComputeInitCube=ComputeInitCube)
     
     LMMachine.runLM()
     
@@ -110,12 +111,13 @@ class ClassRunLM_Cov():
             np.save("Cube",Cube)
         else:
             Cube=np.load("Cube.npy")
+
         
         self.CubeInit=Cube.copy()
         self.DicoChains["CubeInit"]=self.CubeInit
             
         CubeInit=self.DicoChains["CubeInit"]
-        CubeInit=np.random.randn(*(self.DicoChains["CubeInit"].shape))*0.0001+1
+        #CubeInit=np.random.randn(*(self.DicoChains["CubeInit"].shape))*0.0001+1
         
         self.GM.PlotGammaCube(Cube=CubeInit,FigName="Measured")
         X=self.GM.CubeToVec(CubeInit)
@@ -124,6 +126,7 @@ class ClassRunLM_Cov():
         self.GM.PlotGammaCube()
 
         self.NDim=self.CLM.MassFunction.GammaMachine.NParms
+        stop
         # self.NChain=self.NDim*4
         # self.InitDicoChains(X)
         
