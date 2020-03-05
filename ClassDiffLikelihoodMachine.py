@@ -132,7 +132,7 @@ class ClassLikelihoodMachine():
         
         #Sum_Log_SumPi_z1=np.sum(np.log(self.S_dAdg_B+np.dot(self.S_dAdg_A,g)))
         
-        return -np.sum(Nx) + np.sum(Nxi) + Sum_Log_SumPi_z
+        return -np.sum(Nx) + np.sum(Nxi) + Sum_Log_SumPi_z + (1/2)*np.dot(g.T,g)
     
         
 
@@ -148,7 +148,8 @@ class ClassLikelihoodMachine():
         a=np.dot(self.S_dAdg_A,g.reshape((-1,1)))
         dAxdg= np.sum(self.S_dAdg_N,axis=0) +  np.sum( self.S_dAdg_A / (self.S_dAdg_B + a ) , axis=0)
 
-        dLdg=dNxdg+dAxdg
+        
+        dLdg=dNxdg+dAxdg-g
 
         return dLdg
 

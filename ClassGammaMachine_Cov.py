@@ -134,7 +134,7 @@ class ClassGammaMachine():
         for iPlot in range(9):
             S=Cube[iPlot]
             pylab.subplot(3,3,iPlot+1)
-            pylab.imshow(S,interpolation="nearest",vmin=0.,vmax=10.)
+            pylab.imshow(S,interpolation="nearest")#,vmin=0.,vmax=10.)
             pylab.title("[%f - %f]"%(S.min(),S.max()))
         pylab.draw()
         pylab.show(False)
