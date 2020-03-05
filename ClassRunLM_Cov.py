@@ -17,7 +17,7 @@ from DDFacet.Other import ClassTimeIt
 from DDFacet.Other.progressbar import ProgressBar
 from DDFacet.Array import shared_dict
 import ClassCatalogMachine
-import ClassLikelihoodMachine
+import ClassDiffLikelihoodMachine as ClassLikelihoodMachine
 import ClassInitGammaCube
 import ClassDisplayRGB
 
@@ -90,10 +90,13 @@ class ClassRunLM_Cov():
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
         
-        self.finaliseInit()
+        # self.finaliseInit()
 
         self.InitCube(Compute=ComputeInitCube)
-        
+        self.CLM.InitDiffMatrices()
+
+    
+
         
     def finaliseInit(self):
         APP.registerJobHandlers(self)
@@ -126,8 +129,20 @@ class ClassRunLM_Cov():
         self.GM.PlotGammaCube()
 
         self.NDim=self.CLM.MassFunction.GammaMachine.NParms
-        stop
-        # self.NChain=self.NDim*4
-        # self.InitDicoChains(X)
+        self.X=X
         
-        
+    def runLM(self):
+        Alpha=0.1
+        g=self.X
+        g.fill(0)
+        print("Likelihood = %.5f"%(self.CLM.L(g)))
+
+        iStep=0
+        while True:
+            g+= Alpha*self.CLM.dLdg(g)
+            print("Likelihood = %.5f"%(self.CLM.L(g)))
+            if iStep%100==0:
+                self.CLM.MassFunction.updateGammaCube(g)
+                self.GM.PlotGammaCube()
+            iStep+=1
+            

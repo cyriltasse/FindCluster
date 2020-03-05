@@ -13,7 +13,7 @@ from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 
 import ClassInitGammaCube
 
-class ClassDiffLikelyhood():
+class ClassLikelihoodMachine():
     def __init__(self,CM):
         self.CM=CM
         
@@ -26,12 +26,132 @@ class ClassDiffLikelyhood():
         self.MassFunction.setSelectionFunction(self.CM)
 
         self.NSlice=self.zParms[-1]-1
-        APP.registerJobHandlers(self)
+        
+        # APP.registerJobHandlers(self)
 
     def ComputeIndexCube(self,NPix):
+        self.NPix=NPix
         self.IndexCube=np.array([i*np.int64(NPix**2)+np.int64(self.CM.Cat_s.xCube*NPix)+np.int64(self.CM.Cat_s.yCube) for i in range(self.NSlice)]).flatten()
+        self.IndexCube_xy=(np.int64(self.CM.Cat_s.xCube*NPix)+np.int64(self.CM.Cat_s.yCube)).flatten()
 
-    def xs
+    def InitDiffMatrices(self):
+        #self.A=[SqrtCov.dot(for SqrtCov in L_SqrtCov]
+        
+        Ns=self.CM.Cat_s.shape[0]
+        n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
+        n_zt=self.CM.Cat_s.n_zt
+
+        self.CellRad_0=self.MassFunction.GammaMachine.CellRad
+        
+        L_SqrtCov=self.MassFunction.GammaMachine.L_SqrtCov
+        L_NParms=self.MassFunction.GammaMachine.L_NParms
+        A=np.zeros((self.NPix**2,self.MassFunction.GammaMachine.NParms),np.float32)
+        ii=0
+        
+        for iSlice in range(self.NSlice):
+            SqrtCov=L_SqrtCov[iSlice]
+            NParms=L_NParms[iSlice]
+            A[:,ii:ii+NParms]=(n_z[iSlice]*L_SqrtCov[iSlice])
+            ii+=NParms
+
+            
+        self.S_dNdg=np.sum(A,axis=0)
+        self.S_dNdg*= self.CellRad_0**2
+        
+        B=np.zeros((Ns,self.MassFunction.GammaMachine.NParms),np.float32)
+        Bn=np.zeros((Ns,self.MassFunction.GammaMachine.NParms),np.float32)
+        Bc=np.zeros((Ns,),np.float32)
+        ii=0
+        
+        for iSlice in range(self.NSlice):
+            NParms=L_NParms[iSlice]
+            SqrtCov_s=L_SqrtCov[iSlice][self.IndexCube_xy,:]
+            Bn[:,ii:ii+NParms]=n_z[iSlice]*SqrtCov_s
+            B[:,ii:ii+NParms]=n_zt[:,iSlice].reshape((Ns,1))*SqrtCov_s
+            Bc[:]+=n_zt[:,iSlice]
+            ii+=NParms
+        
+        self.CellRad_1=(.001/3600)*np.pi/180
+        self.S_dAdg_N = Bn * self.CellRad_1**2
+        self.S_dAdg_A = B * self.CellRad_1**2
+        self.S_dAdg_B = Bc.reshape((-1,1)) * self.CellRad_1**2
+
+
+        # ###################################
+
+        # g=np.ones((self.MassFunction.GammaMachine.NParms,1),np.float32)
+
+        # A=np.zeros((Ns,self.NSlice),np.float32)
+        # ii=0
+        # for iSlice in range(self.NSlice):
+        #     SqrtCov=L_SqrtCov[iSlice]
+        #     NParms=L_NParms[iSlice]
+        #     SqrtCov_s=L_SqrtCov[iSlice][self.IndexCube_xy,:]
+        #     gs=(g.flat[ii:ii+NParms]).reshape((-1,1))
+        #     n=n_zt[:,iSlice].reshape((-1,1))*CellRad_1**2
+        #     A[:,iSlice]=(n*(1.+np.dot(SqrtCov_s,gs))).flatten()
+        #     ii+=NParms
+        # A0=np.sum(A,axis=1)
+        
+        # A1=self.S_dAdg_B+np.dot(self.S_dAdg_A,g)
+        # print(A0,A1)
+        # stop
+        
+        
+    def L(self,g0):
+        g=g0.reshape((-1,1))
+        Nx=np.dot(self.S_dNdg,g)
+        Nxi= np.dot(self.S_dAdg_N,g)
+        
+        Ns=self.CM.Cat_s.shape[0]
+        n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
+        n_zt=self.CM.Cat_s.n_zt
+
+        # L_SqrtCov=self.MassFunction.GammaMachine.L_SqrtCov
+        # L_NParms=self.MassFunction.GammaMachine.L_NParms
+        
+        # A=np.zeros((Ns,self.NSlice),np.float32)
+        # ii=0
+        # for iSlice in range(self.NSlice):
+        #     SqrtCov=L_SqrtCov[iSlice]
+        #     NParms=L_NParms[iSlice]
+        #     SqrtCov_s=L_SqrtCov[iSlice][self.IndexCube_xy,:]
+        #     gs=(g.flat[ii:ii+NParms]).reshape((-1,1))
+        #     n=n_zt[:,iSlice].reshape((-1,1))*self.CellRad_1**2
+        #     A[:,iSlice]=(n*(1.+np.dot(SqrtCov_s,gs))).flatten()
+        #     ii+=NParms
+
+        
+        #SumPi_z=np.sum(A,axis=1)
+        
+        SumPi_z=self.S_dAdg_B+np.dot(self.S_dAdg_A,g)
+        #print(SumPi_z,SumPi_z1)
+        #stop
+        Sum_Log_SumPi_z=np.sum(np.log(SumPi_z),axis=0)
+        
+        
+        #Sum_Log_SumPi_z1=np.sum(np.log(self.S_dAdg_B+np.dot(self.S_dAdg_A,g)))
+        
+        return -np.sum(Nx) + np.sum(Nxi) + Sum_Log_SumPi_z
+    
+        
+
+    def dLdg(self,g):
+        Ns=self.CM.Cat_s.shape[0]
+        n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
+        n_zt=self.CM.Cat_s.n_zt
+        #GammaCube=self.MassFunction.GammaMachine.GammaCube
+        #SqrtCg=GammaCube-1.
+
+        dNxdg= - self.S_dNdg
+
+        a=np.dot(self.S_dAdg_A,g.reshape((-1,1)))
+        dAxdg= np.sum(self.S_dAdg_N,axis=0) +  np.sum( self.S_dAdg_A / (self.S_dAdg_B + a ) , axis=0)
+
+        dLdg=dNxdg+dAxdg
+
+        return dLdg
+
         
         
     def log_prob(self, X):

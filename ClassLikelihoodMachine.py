@@ -87,7 +87,6 @@ class ClassLikelihoodMachine():
         self.IndexCube=np.array([i*np.int64(NPix**2)+np.int64(self.CM.Cat_s.xCube*NPix)+np.int64(self.CM.Cat_s.yCube) for i in range(self.NSlice)]).flatten()
         #self.IndexCube=np.array([self.CM.Cat_s.xCube*NPix+self.CM.Cat_s.yCube]).flatten()
         
-        
     def log_prob(self, X):
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
