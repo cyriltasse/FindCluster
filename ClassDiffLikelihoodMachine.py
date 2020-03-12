@@ -33,6 +33,9 @@ class ClassLikelihoodMachine():
         self.NPix=NPix
         self.IndexCube=np.array([i*np.int64(NPix**2)+np.int64(self.CM.Cat_s.xCube*NPix)+np.int64(self.CM.Cat_s.yCube) for i in range(self.NSlice)]).flatten()
         self.IndexCube_xy=(np.int64(self.CM.Cat_s.xCube*NPix)+np.int64(self.CM.Cat_s.yCube)).flatten()
+        indy,indx=np.where(self.MassFunction.GammaMachine.ThisMask==0)
+        #self.IndexCube_Mask=np.array([i*(np.int64(indy).flatten()*NPix+np.int64(indx).flatten()) for i in range(self.NSlice)]).flatten()
+        self.IndexCube_Mask=(np.int64(indy).flatten()*NPix+np.int64(indx).flatten())
 
     def InitDiffMatrices(self):
         #self.A=[SqrtCov.dot(for SqrtCov in L_SqrtCov]
@@ -55,7 +58,7 @@ class ClassLikelihoodMachine():
             ii+=NParms
 
             
-        self.S_dNdg=np.sum(A,axis=0)
+        self.S_dNdg=np.sum(A[self.IndexCube_Mask,:],axis=0)
         self.S_dNdg*= self.CellRad_0**2
         
         B=np.zeros((Ns,self.MassFunction.GammaMachine.NParms),np.float32)
@@ -132,7 +135,7 @@ class ClassLikelihoodMachine():
         
         #Sum_Log_SumPi_z1=np.sum(np.log(self.S_dAdg_B+np.dot(self.S_dAdg_A,g)))
         
-        return -np.sum(Nx) + np.sum(Nxi) + Sum_Log_SumPi_z + (1/2)*np.dot(g.T,g)
+        return -np.sum(Nx) + np.sum(Nxi) + Sum_Log_SumPi_z + (1/2.)*np.dot(g.T,g)
     
         
 

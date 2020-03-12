@@ -30,6 +30,7 @@ class ClassMassFunction():
         self.CSF=None
         
     def setSelectionFunction(self,CM):
+        self.CM=CM
         self.CSF=ClassSelectionFunction.ClassSelectionFunction(CM)
 
         
@@ -48,7 +49,7 @@ class ClassMassFunction():
                                                 NPix,
                                                 zParms=zParms,
                                                 ScaleKpc=ScaleKpc,
-                                                Mode=Mode)
+                                                Mode=Mode,CM=self.CM)
 
         self.GammaMachine=CGM
 

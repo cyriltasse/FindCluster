@@ -34,6 +34,7 @@ def test(ComputeInitCube=False):
     rac_deg,decc_deg=241.20678,55.59485 # cluster
     FOV=0.15
     FOV=0.05
+
     SubField={"rac_deg":rac_deg,
               "decc_deg":decc_deg,
               "FOV":FOV,
@@ -81,17 +82,19 @@ class ClassRunLM_Cov():
                                            zParms=self.zParms,
                                            ScaleKpc=ScaleKpc)
         self.GM=self.CLM.MassFunction.GammaMachine
+
         # CLM.showRGB()
         self.CLM.ComputeIndexCube(self.NPix)
-
+        
 
 
         # self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CLM,ScaleKpc=[200.,500.])
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
         
-        # self.finaliseInit()
+        self.finaliseInit()
 
+        self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
         self.InitCube(Compute=ComputeInitCube)
         self.CLM.InitDiffMatrices()
 
@@ -136,13 +139,16 @@ class ClassRunLM_Cov():
         g=self.X
         g.fill(0)
         print("Likelihood = %.5f"%(self.CLM.L(g)))
-
         iStep=0
+        self.CLM.MassFunction.updateGammaCube(g)
+        self.GM.PlotGammaCube(OutName="g%4.4i.png"%iStep)
+
         while True:
             g+= Alpha*self.CLM.dLdg(g)
             print("Likelihood = %.5f"%(self.CLM.L(g)))
-            if iStep%100==0:
+            if iStep%1==0:
                 self.CLM.MassFunction.updateGammaCube(g)
-                self.GM.PlotGammaCube()
+                self.GM.PlotGammaCube(OutName="g%4.4i.png"%iStep)
+                
             iStep+=1
             

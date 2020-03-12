@@ -16,6 +16,10 @@ from DDFacet.Array import ModLinAlg
 log = logger.getLogger("ClassGammaMachine")
 import ClassCovMatrix
 
+from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
+from DDFacet.Other import AsyncProcessPool
+from DDFacet.Array import shared_dict
+
 class ClassGammaMachine():
     def __init__(self,
                  radec_main,
@@ -24,7 +28,9 @@ class ClassGammaMachine():
                  NPix,
                  zParms=[0.01,2.,40],
                  Mode="ConvGaussNoise",
-                 ScaleKpc=100):
+                 ScaleKpc=100,
+                 CM=None):
+        self.CM=CM
         self.DoPrint=True
         self.radec=radec
         self.rac,self.decc=self.radec
@@ -49,14 +55,29 @@ class ClassGammaMachine():
         self.decg=decg.reshape(lg.shape)
         self.lg,self.mg=lg,mg
 
+        i0=int(lg.min()/self.CellRad+N0)
+        i1=i0+NPix+1
+        j0,j1=mg.min()/self.CellRad+N0,mg.max()/self.CellRad+N0
+        self.ThisMask=np.zeros((NPix,NPix),np.float32)
+        for i in range(NPix):
+            for j in range(NPix):
+                ii,jj=self.CM.RaDecToMaskPix(self.rag[i,j],self.decg[i,j])
+                self.ThisMask[i,j]=self.CM.MaskArray[0,0,int(ii),int(jj)]
+                
+
+        
+        
         self.GammaCube=None
         self.NSlice=self.zg.size-1
 
         self.L_NParms=[]
         self.HasReferenceCube=False
-        self.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
-        log.print("Number of free parameters %i"%self.NParms)
                              
+        self.DicoCovSVD = shared_dict.create("DicoCovSVD")
+        
+        APP.registerJobHandlers(self)
+
+        
     def initCovMatrices(self,
                         ScaleFWHMkpc=100.,
                         Type="Normal"):
@@ -77,6 +98,7 @@ class ClassGammaMachine():
                 self.L_NParms=DicoSave["L_NParms"]
                 self.L_Hinv=DicoSave["L_Hinv"]
                 self.NParms=np.sum(self.L_NParms)
+                log.print("Number of free parameters %i"%self.NParms)
                 return
             
         f=2.*np.sqrt(2.*np.log(2.))
@@ -85,18 +107,20 @@ class ClassGammaMachine():
         self.L_Hinv=[]
         
         for iz in range(self.NSlice):
-            z0,z1=self.zg[iz],self.zg[iz+1]
-            zm=(z0+z1)/2.
-            SigmaRad=Sig_kpc*cosmo.arcsec_per_kpc_comoving(zm).to_value()/(3600.)*np.pi/180
-            CCM=ClassCovMatrix.ClassCovMatrix(NPix=self.NPix,SigmaPix=SigmaRad/self.CellRad)
-            CCM.buildGaussianCov()
-            A=CCM.sqrtCs
-            Hinv=ModLinAlg.invSVD((A.T).dot(A))
-            self.L_Hinv.append(Hinv)
-            self.L_SqrtCov.append(CCM.sqrtCs)
-            self.L_NParms.append(CCM.k)
+            APP.runJob("_computeSVD:%i"%(iz),
+                       self._computeSVD,
+                       args=(iz,Sig_kpc))#,serial=True)
+
+        APP.awaitJobResults("_computeSVD:*", progress="Compute SqrtCov")
+        self.DicoCovSVD.reload()
+        for iz in range(self.NSlice):
+            sqrtCs=self.DicoCovSVD["sqrtCs_%i"%iz].copy()
+            self.L_Hinv.append(self.DicoCovSVD["Hinv_%i"%iz].copy())
+            self.L_SqrtCov.append(sqrtCs)
+            self.L_NParms.append(sqrtCs.shape[1])
             
         self.NParms=np.sum(self.L_NParms)
+        log.print("Number of free parameters %i"%self.NParms)
         
         DicoSave={"Parms":Parms,
                   "L_SqrtCov":self.L_SqrtCov,
@@ -106,7 +130,17 @@ class ClassGammaMachine():
         log.print("Saving sqrt(Cov) in %s"%FileOut)
         MyPickle.Save(DicoSave,FileOut)
         
-        
+    def _computeSVD(self,iz,Sig_kpc):
+        z0,z1=self.zg[iz],self.zg[iz+1]
+        zm=(z0+z1)/2.
+        SigmaRad=Sig_kpc*cosmo.arcsec_per_kpc_comoving(zm).to_value()/(3600.)*np.pi/180
+        CCM=ClassCovMatrix.ClassCovMatrix(NPix=self.NPix,SigmaPix=SigmaRad/self.CellRad)
+        CCM.buildGaussianCov()
+        A=CCM.sqrtCs
+        Hinv=ModLinAlg.invSVD((A.T).dot(A))
+        self.DicoCovSVD["sqrtCs_%i"%iz]=A
+        self.DicoCovSVD["Hinv_%i"%iz]=Hinv
+            
     def CubeToVec(self,Cube):
         ii=0
         Cube=np.complex64(Cube.copy())
@@ -134,12 +168,23 @@ class ClassGammaMachine():
         for iPlot in range(9):
             S=Cube[iPlot]
             pylab.subplot(3,3,iPlot+1)
-            pylab.imshow(S,interpolation="nearest")#,vmin=0.,vmax=10.)
+            pylab.imshow(S,interpolation="nearest",vmin=0.5,vmax=2.)
             pylab.title("[%f - %f]"%(S.min(),S.max()))
         pylab.draw()
         pylab.show(False)
         pylab.pause(0.1)
         if OutName: fig.savefig(OutName)
+        
+        # fig=pylab.figure("%s.Mask"%FigName)
+        # pylab.clf()
+        # for iPlot in range(9):
+        #     pylab.subplot(3,3,iPlot+1)
+        #     pylab.imshow(self.ThisMask,interpolation="nearest")#,vmin=0.,vmax=10.)
+        #     pylab.title("[%f - %f]"%(S.min(),S.max()))
+        # pylab.draw()
+        # pylab.show(False)
+        # pylab.pause(0.1)
+
 
     def computeGammaCube(self,X):
         LX=[]
