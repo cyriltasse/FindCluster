@@ -180,6 +180,8 @@ def map_dtfe2d(x, y, xsize=None, ysize=None):
     else:
         x_m = np.linspace(np.min(x), np.max(x), xsize)
         y_m = np.linspace(np.min(y), np.max(y), ysize)
+    dx=x_m[1]-x_m[0]
+    dy=y_m[1]-y_m[0]
     x_m, y_m = np.meshgrid(x_m, y_m)
     grid = griddata(tab, d, (x_m, y_m), method='linear')
-    return grid
+    return grid,dx,dy

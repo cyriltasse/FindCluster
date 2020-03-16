@@ -17,6 +17,10 @@ import scipy.signal
 import scipy.stats
 import pydtfe
 
+from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
+from DDFacet.Other import Multiprocessing
+from DDFacet.Other import AsyncProcessPool
+
 def test():
     CCM=ClassCovMatrix(NPix=11,SigmaPix=2.)
     CCM.buildFromCatalog()
@@ -143,149 +147,86 @@ class ClassCovMatrix():
         C.y*=h
         C.z*=h
 
-        
+        C=C[np.where(np.logical_not(np.isnan(C.x)))]
     
-        # x,y=np.mgrid[0:100:100*1j,0:100:100*1j]
-        # d=np.sqrt( (x.reshape((-1,1))-x.reshape((1,-1)))**2 + (y.reshape((-1,1))-y.reshape((1,-1)))**2)
-        # pylab.clf()
-        # pylab.imshow(d)
-        # pylab.show()
+        X0,Y0=C.x, C.y
+        X1,Y1=C.y, C.z
+        X2,Y2=C.z, C.x
 
-        
-        z=np.unique(C.redshift)
-
-        C=C[C.redshift==z[0]]
-        
-        ind=np.where(np.logical_not(np.isnan(C.x)))
-        C=C[ind]
-
-        Y=C.y
-        X=C.x
-        
-        Ns=X.size
-
-        CellMpc=100.e-3
-        BoxSize=np.max([X.max()-X.min(),Y.max()-Y.min()])
-        BoxArea=(X.max()-X.min())*(Y.max()-Y.min())
-        #X=np.random.rand(Ns)*(X.max()-X.min())+X.min()
-        #Y=np.random.rand(Ns)*(Y.max()-Y.min())+Y.min()
-        
-        
-        NPix=int(1.1*BoxSize/CellMpc)
-        if NPix%2==0:
-            NPix+=1
-        log.print("Gridding the simulated points over a grid of size %i"%NPix)
-        
-        scGrid=np.linspace(-CellMpc/2,NPix*CellMpc+CellMpc/2.,NPix+1)
-        scGrid_m=(scGrid[0:-1]+scGrid[1::])/2.
-        # nMean=Ns/BoxSize
-        # Gamma=np.ones((Ns,),np.float32)*
-        Cov=np.zeros((NPix,),np.float32)
-        
-        scGrid_x,scGrid_y=np.mgrid[0:NPix,0:NPix]
-        Im=np.ones((NPix,NPix),np.float32)
-        AutoCorrIm=scipy.signal.fftconvolve(Im, Im)
-        dx,dy=np.mgrid[-(NPix-1):NPix-1:(2*NPix-1)*1j,-(NPix-1):NPix-1:(2*NPix-1)*1j]
-        dx*=CellMpc
-        dy*=CellMpc
-        
-        dr=np.sqrt(dx**2+dy**2)
-        Ndr=np.zeros((NPix,),np.float32)
-        Omega=BoxArea
-        dOmega=CellMpc**2
-        for iD in range(NPix):
-            d0=scGrid[iD]
-            d1=scGrid[iD+1]
-            dm=(d0+d1)/2.
-            indx,indy=np.where((dr>=d0) & (dr<d1))
-            Ndr[iD]=np.sum(AutoCorrIm[indx,indy])
-
-        # pylab.clf()
-        # pylab.plot(scGrid_m,Ndr)
-        # pylab.draw()
-        # pylab.show(block=False)
-        # pylab.pause(0.1)
-        # return
-        
-        DD=np.sqrt( (X.reshape((-1,1))-X.reshape((1,-1)))**2 + (Y.reshape((-1,1))-Y.reshape((1,-1)))**2)
-        indx,indy=np.triu_indices(NPix)
-        DD=DD.flat[NPix*np.int64(indx)+np.int64(indy)]
-
-        NMean=Ns/Omega
-        D00=1.
-        D01=D10=-(1./NMean-1)
-        D11=(1./NMean-1)**2
-        A=np.zeros((NPix,),np.float32)
-        for iD in range(NPix):
-            d0=scGrid[iD]
-            d1=scGrid[iD+1]
-            dm=(d0+d1)/2.
-            N=np.where((DD>=d0) & (DD<d1))[0].size
-            A[iD]=N/Ndr[iD]
-            n00=Ndr[iD]*(Omega-N*dOmega)**2
-            n10=n01=(Omega-N*dOmega)*dOmega
-            n11=(N*dOmega)**2
-            Cov[iD] = (D00*n00 + D10*n10 + D01*n01 + D11*n11)/(Ndr[iD]*dOmega**2)
-
-        #Cov/=Ns
-        #pylab.clf()
-        pylab.plot(scGrid_m,np.log10(A))
-        #pylab.plot(scGrid_m,np.log10(Ndr))
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
-
-        return
+        D=C.x.max()-C.x.min()
+        X3,Y3=np.mod(C.y+np.random.rand(1)[0]*D,D), np.mod(C.x +np.random.rand(1)[0]*D,D)
+        X4,Y4=np.mod(C.z+np.random.rand(1)[0]*D,D), np.mod(C.y +np.random.rand(1)[0]*D,D)
+        X=np.concatenate([X0,X1,X2,X3,X4])
+        Y=np.concatenate([Y0,Y1,Y2,Y3,Y4])
 
     
-        
-        for iD in range(NPix):
-            d0=scGrid[iD]
-            d1=scGrid[iD+1]
-            dm=(d0+d1)/2.
-            ThisN=np.where((DD>=d0) & (DD<d1))[0].size/NMean-1.
-            Cov[iD]=ThisN/(np.pi*(d1**2-d0**2))
 
-        Cov/=X.size
-        Cov+=1e-6
+        Nn=10000
+        Im,dx,dy=pydtfe.map_dtfe2d(X,Y,xsize=Nn,ysize=Nn)
+
+        Dx=300
+        Im=Im[Dx:-Dx,Dx:-Dx]
+        Gamma=Im/np.mean(Im)
+        
         pylab.clf()
-        pylab.plot(scGrid_m,np.log10(Cov))
-        pylab.draw()
-        pylab.show()
-        return
-        
-        # A=np.zeros((NPix,NPix),np.float32)
-        # A.flat[np.int64(Y/Cellkpc)*NPix+np.int64(X/Cellkpc)]+=1.
-        # # ii=np.int64(Y/Cellkpc)
-        # # jj=np.int64(X/Cellkpc)
-
-        # # for i in range(X.size):
-        # #     if i%100==0:
-        # #         print("%i/%i"%(i,X.size))
-        # #     A[ii,jj]+=1.
-
-            
-
-        # Supp=31
-        # Sig=3.
-        # dx,dy=np.mgrid[-Supp:Supp:(2*Supp+1)*1j,-Supp:Supp:(2*Supp+1)*1j]
-        # r=np.sqrt(dx**2+dy**2)
-        # G=np.exp(-r**2/(2.*Sig**2))
-        # G/=np.sum(G)
-        # A=scipy.signal.fftconvolve(A, G)
-        # Gamma=A/np.mean(A)
-        
-        #import pylab
-        pylab.clf()
-        pylab.imshow(Gamma,interpolation="nearest")
+        pylab.imshow(np.log10(Im))#,vmin=0,vmax=10000)
         pylab.colorbar()
         pylab.draw()
-        pylab.show()
+        pylab.show(False)
+        
+        Np=381
+        Fact=3
+        R=np.arange(0,5,dx*Fact)
+        Rn=np.zeros((R.size,),np.float32)
+        xg,yg=np.mgrid[0:Nn,0:Nn]
+        xg=xg*dx
+        yg=yg*dy
+        G=Gamma-1.
+        Cov=np.zeros((R.size,),np.float32)
 
-        
-        
-        
-        
+        T=ClassTimeIt.ClassTimeIt()
+        T.disable()
+        Dx=int(R.max()/dx)
+        Dy=int(R.max()/dy)
+        for iP in range(Np):
+            print("%i/%i [%i]"%(iP,Np,R.size))
+            i,j=int(np.random.rand(1)[0]*Im.shape[0]),int(np.random.rand(1)[0]*Im.shape[1])
+            i0=np.max([0,i-Dx])
+            i1=np.min([Nn,i+Dx])
+            j0=np.max([0,j-Dy])
+            j1=np.min([Nn,j+Dy])
+            xgs=xg[i0:i1,j0:j1]
+            ygs=yg[i0:i1,j0:j1]
+            d=np.sqrt((i*dx-xgs)**2+(j*dy-ygs)**2)
+            Gs=G[i0:i1,j0:j1]
+            T.timeit("Compute d")
+            for iR in range(R.size):
+                # print(iP,iR)
+                rm=R[iR]
+                r0=rm-dx/2.*Fact
+                r1=rm+dx/2.*Fact
+                indx,indy=np.where((d>=r0) & (d<r1))
+                Nsx,Nsy=Gs.shape
+                Cx=((indx>=0)&(indx<Nsx))
+                Cy=((indy>=0)&(indy<Nsy))
+                Cxy=(Cx&Cy)
+                indx=indx[Cxy]
+                indy=indy[Cxy]
+                T.timeit("  Where ")
+                Cov[iR]+=np.sum(G[i,j]*Gs[indx,indy])
+                Rn[iR]+=indx.size
+                T.timeit("  Rest ")
+
+        Cov/=Rn
+
+        np.savez("CovMillenium",R=R,Cov=Cov)
+        pylab.clf()
+        pylab.plot(R,Cov)
+        pylab.draw()
+        pylab.show(False)
+        stop
+                
+                                   
     def buildGaussianCov(self):
         N=self.NPix
         x,y=np.mgrid[0:N,0:N]
