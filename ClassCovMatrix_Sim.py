@@ -54,6 +54,7 @@ class ClassCovMatrix():
 
     def buildFromCatalog(self,dz=0.1):
         File="/data/tasse/DataDeepFields/Millenium_z_0.5_0.63.txt"
+        self.CatFile=File
         log.print("Reading %s"%File)
         C=np.genfromtxt(File,dtype=[("galaxyID",np.float32),("x",np.float32),("y",np.float32),("z",np.float32),("redshift",np.float32),("snapnum",np.float32),("stellarMass",np.float32)],delimiter=",")
         C=C.view(np.recarray)
@@ -69,16 +70,13 @@ class ClassCovMatrix():
         C=C[C.redshift==z0]
         z1=z0+dz
 
-        
-
-
-
         log.print("  Depth in the line of sight %.4f Mpc"%(C.z.max()-C.z.min()))
         a=cosmo.comoving_distance([0.5, 0.6])
         dStack=a.value[1]-a.value[0]
 
-        NStack=1#int(dStack/(C.z.max()-C.z.min()))
-        #log.print("  Making %i slices for dz=%.2f"%(NStack,dz))
+        NStack=int(dStack/(C.z.max()-C.z.min()))
+        NStack=1
+        log.print("  Making %i slices for dz=%.2f"%(NStack,dz))
 
         def give_XYZ():
             r=int(np.random.rand(1)[0]*3)
@@ -122,7 +120,7 @@ class ClassCovMatrix():
         pylab.show(False)
         pylab.pause(0.1)
 
-    def MeasureCovInMap(self,MaxScaleMpc=5.,Np=1000):
+    def MeasureCovInMap(self,MaxScaleMpc=2.,Np=1000):
         log.print("Measuring simulation covariance matrix...")
         dx,dy=self.dx,self.dy
         Nn=self.Gamma.shape[0]
@@ -148,8 +146,7 @@ class ClassCovMatrix():
         
         self.DicoSim["dxdy"]=(dx,dy)
                     # APP.runJob("_estimateGammaAt:%i:%i:%i"%(iScale,i,j),
-                    #            self._estimateGammaAt,
-                    #            args=(iScale,i,j))#,serial=True)
+                    #            self._estimateGammaAt,                    #            args=(iScale,i,j))#,serial=True)
 
 
         for iP in range(Np):
@@ -161,16 +158,28 @@ class ClassCovMatrix():
 
         APP.awaitJobResults("_computeCovNAt:*", progress="Meas. Cov. Sample")
 
-        Cov_Sum=np.sum(self.DicoSim["Cov_Sum"],axis=0)
-        Cov_N=np.sum(self.DicoSim["Cov_N"],axis=0)
-        Cov=Cov_Sum/Cov_N
+
+        
+        #Cov_Sum=np.sum(self.DicoSim["Cov_Sum"],axis=0)
+        #Cov_N=np.sum(self.DicoSim["Cov_N"],axis=0)
+        Cov_Sum=self.DicoSim["Cov_Sum"]
+        Cov_N=self.DicoSim["Cov_N"]
+        Cov=np.median(Cov_Sum/Cov_N,axis=0)
         R=self.DicoSim["R"]
-        np.savez("CovMillenium",R=R,Cov=Cov)
+
+        FileOut="%s.RadialCov.npz"%self.CatFile
+        log.print("Saving radial Cov in: %s"%FileOut)
+        np.savez(FileOut,
+                 R=R,
+                 Cov=Cov,
+                 Cov_Sum=self.DicoSim["Cov_Sum"],
+                 Cov_N=self.DicoSim["Cov_N"])
         
         pylab.clf()
         pylab.plot(R,Cov)
         pylab.draw()
         pylab.show(False)
+        pylab.pause(0.1)
 
     def _computeCovNAt(self,iP,i,j):
         T=ClassTimeIt.ClassTimeIt()
