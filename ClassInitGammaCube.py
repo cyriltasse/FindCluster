@@ -38,9 +38,9 @@ class ClassInitGammaCube():
         nz,nx=self.GM.NSlice,self.GM.NPix
         self.DicoCube["GammaCube0"]=np.zeros((self.NScales,nz,nx,nx),np.float32)
         self.ComputeTheta()
-        
+
+    def finaliseInit(self):
         APP.registerJobHandlers(self)
-        
 
     def InitGammaCube(self):
         log.print("Initialise the Gamma cube...")

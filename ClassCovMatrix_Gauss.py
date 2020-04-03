@@ -125,10 +125,11 @@ def test2Pt():
     pylab.pause(0.1)
         
 class ClassCovMatrix():
-    def __init__(self,NPix=11,SigmaPix=2.,Type="Normal"):
-        self.NPix=NPix
-        self.SigmaPix=SigmaPix
-        self.Type=Type
+    def __init__(self):
+        pass
+        # self.NPix=NPix
+        # self.SigmaPix=SigmaPix
+        # self.Type=Type
         
     def toSparse(self,C,Th=1e-2):
         Ca=np.abs(C)
@@ -227,15 +228,20 @@ class ClassCovMatrix():
         stop
                 
                                    
-    def buildGaussianCov(self):
-        N=self.NPix
+    def giveCovMat(self,
+                   CellSizeRad=None,
+                   NPix=None,
+                   zm=None,
+                   SigmaPix=None):
+        N=NPix
         x,y=np.mgrid[0:N,0:N]
         dx=x.reshape((-1,1))-x.reshape((1,-1))
         dy=y.reshape((-1,1))-y.reshape((1,-1))
         d=dx**2+dy**2
-        Sig=self.SigmaPix
+        Sig=SigmaPix
 
-        C=np.exp(-(d)/(2.*Sig**2))*3.
+        C=np.exp(-(d)/(2.*Sig**2))#*100
+        return C
         Cs,Sparsity=self.toSparse(C)
         M=C.shape[0]
         log.print("  Non-zeros are %.1f%% of the matrix size [%ix%i]"%(Sparsity*100,M,M))

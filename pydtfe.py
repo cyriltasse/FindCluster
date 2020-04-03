@@ -89,7 +89,7 @@ def densities2d(tri, the_pool, areas):
     return np.array(dens)
 
 
-def map_dtfe3d(x, y, z, xsize, ysize=None, zsize=None):
+def map_dtfe3d(x, y, z, x_m, y_m, z_m):#xsize, ysize=None, zsize=None):
     """
     Create a 3d density cube from given x, y and z points in a volume
 
@@ -120,16 +120,24 @@ def map_dtfe3d(x, y, z, xsize, ysize=None, zsize=None):
     volumes = get_volumes(tri, the_pool)
     d = densities3d(tri, the_pool, volumes)
     the_pool.close()
-    if (ysize is None) & (zsize is None):
-        size = xsize
-        x_m = np.linspace(np.min(x), np.max(x), size)
-        y_m = np.linspace(np.min(y), np.max(y), size)
-        z_m = np.linspace(np.min(z), np.max(z), size)
-    else:
-        x_m = np.linspace(np.min(x), np.max(x), xsize)
-        y_m = np.linspace(np.min(y), np.max(y), ysize)
-        z_m = np.linspace(np.min(z), np.max(z), zsize)
-    x_m, y_m, z_m = np.meshgrid(x_m, y_m, z_m)
+    # if (ysize is None) & (zsize is None):
+    #     size = xsize
+    #     x_m = np.linspace(np.min(x), np.max(x), size)
+    #     y_m = np.linspace(np.min(y), np.max(y), size)
+    #     z_m = np.linspace(np.min(z), np.max(z), size)
+    # else:
+    #     x_m = np.linspace(np.min(x), np.max(x), xsize)
+    #     y_m = np.linspace(np.min(y), np.max(y), ysize)
+    #     z_m = np.linspace(np.min(z), np.max(z), zsize)
+    # dx=x_m[1]-x_m[0]
+    # dy=y_m[1]-y_m[0]
+    # dz=z_m[1]-z_m[0]
+    # x_m1d=x_m
+    # y_m1d=y_m
+    # z_m1d=z_m
+    # x_m, y_m, z_m = np.meshgrid(x_m, y_m, z_m)
+    
+    
     grid = griddata(tab, d, (x_m, y_m, z_m), method='linear')
     return grid
 

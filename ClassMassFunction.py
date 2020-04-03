@@ -41,8 +41,8 @@ class ClassMassFunction():
                      NPix,
                      zParms=None,
                      ScaleKpc=500):
-        Mode="ConvGaussNoise"
-        Mode="ConvPaddedFFT"
+        Mode="Sim3D"
+        #Mode="Gauss"
         CGM=ClassGammaMachine.ClassGammaMachine(radec_main,
                                                 radec,
                                                 CellDeg,

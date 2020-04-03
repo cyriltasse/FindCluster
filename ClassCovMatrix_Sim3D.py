@@ -87,9 +87,9 @@ class ClassCovMatrix():
         x0,x1=X.min(),X.max()
         y0,y1=Y.min(),Y.max()
         z0,z1=Z.min(),Z.max()
-        xc=np.mean(X)#np.random.rand(1)[0]*(x1-x0)+x0
-        yc=np.mean(Y)#np.random.rand(1)[0]*(y1-y0)+y0
-        zc=np.mean(Z)#np.random.rand(1)[0]*(z1-z0)+z0
+        xc=np.mean(X) # np.random.rand(1)[0]*(x1-x0)+x0
+        yc=np.mean(Y) # np.random.rand(1)[0]*(y1-y0)+y0
+        zc=np.mean(Z) # np.random.rand(1)[0]*(z1-z0)+z0
         Dx=Nn*dx
         Cx=(X>xc-Dx/2.)&(X<xc+Dx/2.)
         Cy=(Y>yc-Dx/2.)&(Y<yc+Dx/2.)
@@ -110,6 +110,8 @@ class ClassCovMatrix():
             pylab.draw()
             pylab.show(False)
             pylab.pause(0.3)
+
+            
         return
         Dx=300
         Im=Im[Dx:-Dx,Dx:-Dx]

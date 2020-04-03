@@ -17,7 +17,8 @@ from DDFacet.Other import ClassTimeIt
 from DDFacet.Other.progressbar import ProgressBar
 from DDFacet.Array import shared_dict
 import ClassCatalogMachine
-import ClassDiffLikelihoodMachine as ClassLikelihoodMachine
+#import ClassDiffLikelihoodMachine as ClassLikelihoodMachine
+import ClassLogDiffLikelihoodMachine as ClassLikelihoodMachine
 import ClassInitGammaCube
 import ClassDisplayRGB
 
@@ -28,12 +29,14 @@ from DDFacet.Other import AsyncProcessPool
 # from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 # from DDFacet.Other import Multiprocessing
 # from DDFacet.Other import AsyncProcessPool
+import scipy.optimize
 
 
 def test(ComputeInitCube=False):
     rac_deg,decc_deg=241.20678,55.59485 # cluster
     FOV=0.15
     FOV=0.05
+#    FOV=0.02
 
     SubField={"rac_deg":rac_deg,
               "decc_deg":decc_deg,
@@ -92,16 +95,17 @@ class ClassRunLM_Cov():
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
         
-        self.finaliseInit()
+#        self.finaliseInit()
 
         self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
         self.InitCube(Compute=ComputeInitCube)
-        self.CLM.InitDiffMatrices()
-
+        # self.CLM.InitDiffMatrices()
+        
     
 
         
     def finaliseInit(self):
+        self.CIGC.finaliseInit()
         APP.registerJobHandlers(self)
         AsyncProcessPool.init(ncpu=self.NCPU,
                               affinity=0)
@@ -135,13 +139,27 @@ class ClassRunLM_Cov():
         self.X=X
         
     def runLM(self):
-        Alpha=0.1
+        Alpha=0.01
         g=self.X
         g.fill(0)
         print("Likelihood = %.5f"%(self.CLM.L(g)))
         iStep=0
         self.CLM.MassFunction.updateGammaCube(g)
         self.GM.PlotGammaCube(OutName="g%4.4i.png"%iStep)
+        
+        g=self.X
+        # while True:
+        #     g.flat[:]=np.random.randn(g.size)
+        #     print("Likelihood = %.5f"%(self.CLM.L(g)))
+        #     iStep=0
+        #     self.CLM.MassFunction.updateGammaCube(g)
+        #     self.GM.PlotGammaCube(OutName="g%4.4i.png"%iStep)
+            
+        def f(g):
+            self.CLM.MassFunction.updateGammaCube(g)
+            L=self.CLM.L(g)
+            print(g,L)
+            return L
 
         while True:
             g+= Alpha*self.CLM.dLdg(g)
@@ -149,6 +167,9 @@ class ClassRunLM_Cov():
             if iStep%1==0:
                 self.CLM.MassFunction.updateGammaCube(g)
                 self.GM.PlotGammaCube(OutName="g%4.4i.png"%iStep)
-                
             iStep+=1
+
+        # g0=np.zeros_like(g)
+        # g0=np.random.randn(g.size)
+        # Res=scipy.optimize.minimize(f,g0)
             

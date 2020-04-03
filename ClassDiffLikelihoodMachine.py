@@ -135,7 +135,7 @@ class ClassLikelihoodMachine():
         
         #Sum_Log_SumPi_z1=np.sum(np.log(self.S_dAdg_B+np.dot(self.S_dAdg_A,g)))
         
-        return -np.sum(Nx) + np.sum(Nxi) + Sum_Log_SumPi_z + (1/2.)*np.dot(g.T,g)
+        return -np.sum(Nx) + np.sum(Nxi) + Sum_Log_SumPi_z - (1/2.)*np.dot(g.T,g)
     
         
 

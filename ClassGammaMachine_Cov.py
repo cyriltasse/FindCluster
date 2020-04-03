@@ -14,7 +14,8 @@ from DDFacet.Other import logger
 from DDFacet.Other import MyPickle
 from DDFacet.Array import ModLinAlg
 log = logger.getLogger("ClassGammaMachine")
-import ClassCovMatrix
+import ClassCovMatrix_Gauss
+import ClassCovMatrix_Sim3D_2
 
 from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 from DDFacet.Other import AsyncProcessPool
@@ -27,7 +28,7 @@ class ClassGammaMachine():
                  CellDeg,
                  NPix,
                  zParms=[0.01,2.,40],
-                 Mode="ConvGaussNoise",
+                 Mode="Sim3D",
                  ScaleKpc=100,
                  CM=None):
         self.CM=CM
@@ -79,10 +80,9 @@ class ClassGammaMachine():
 
         
     def initCovMatrices(self,
-                        ScaleFWHMkpc=100.,
-                        Type="Normal"):
+                        ScaleFWHMkpc=100.):
         
-        FileOut="Cov_%s_%ikpc.DicoCov"%(Type,ScaleFWHMkpc)
+        FileOut="Cov_%s_%ikpc.DicoCov"%(self.Mode,ScaleFWHMkpc)
         
         Parms={"CellDeg":self.CellDeg,
                "NPix":self.NPix,
@@ -130,13 +130,51 @@ class ClassGammaMachine():
         log.print("Saving sqrt(Cov) in %s"%FileOut)
         MyPickle.Save(DicoSave,FileOut)
         
+    def toSparse(self,C,Th=1e-2):
+        Ca=np.abs(C)
+        indi,indj=np.where(Ca>Th*Ca.max())
+        data=C[indi,indj]
+        M=C.shape[0]
+        Cs=scipy.sparse.coo_matrix((data, (indi, indj)), shape=(M, M))
+        S=Cs.size/M**2
+        return Cs,S
+
     def _computeSVD(self,iz,Sig_kpc):
         z0,z1=self.zg[iz],self.zg[iz+1]
         zm=(z0+z1)/2.
         SigmaRad=Sig_kpc*cosmo.arcsec_per_kpc_comoving(zm).to_value()/(3600.)*np.pi/180
-        CCM=ClassCovMatrix.ClassCovMatrix(NPix=self.NPix,SigmaPix=SigmaRad/self.CellRad)
-        CCM.buildGaussianCov()
-        A=CCM.sqrtCs
+        self.Scale_Cov_X=None
+        if self.Mode=="Gauss":
+            CCM=ClassCovMatrix_Gauss.ClassCovMatrix()
+            C=CCM.giveCovMat(CellSizeRad=self.CellRad,
+                             NPix=self.NPix,
+                             zm=zm,
+                             SigmaPix=SigmaRad/self.CellRad)
+            
+        elif self.Mode=="Sim3D":
+            CCM=ClassCovMatrix_Sim3D_2.ClassCovMatrix()
+            C=CCM.giveCovMat(CellSizeRad=self.CellRad,
+                             NPix=self.NPix,
+                             zm=zm)
+            #self.Scale_Cov_X="log"C.Scale_Cov_X
+            
+        Cs,Sparsity=self.toSparse(C)
+        M=C.shape[0]
+        log.print("  Non-zeros are %.1f%% of the matrix size [%ix%i]"%(Sparsity*100,M,M))
+        self.Cs=Cs
+        CellSize=1.
+        A=(CellSize*M)**2
+        # k=np.max([A/Sig**2,1.])
+        # k=int(k*3)
+        k=M-1#int(np.min([M-1,k]))
+        log.print("Choosing k=%i [M=%i]"%(k,M))
+        self.k=k
+        Us,ss,Vs=scipy.sparse.linalg.svds(Cs,k=k)
+        sss=ss[ss>0]
+        log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
+        ssqs=np.sqrt(ss)
+        A= sqrtCs =Us*ssqs.reshape(1,ssqs.size)
+        
         Hinv=ModLinAlg.invSVD((A.T).dot(A))
         self.DicoCovSVD["sqrtCs_%i"%iz]=A
         self.DicoCovSVD["Hinv_%i"%iz]=Hinv
@@ -168,7 +206,7 @@ class ClassGammaMachine():
         for iPlot in range(9):
             S=Cube[iPlot]
             pylab.subplot(3,3,iPlot+1)
-            pylab.imshow(S,interpolation="nearest",vmin=0.5,vmax=2.)
+            pylab.imshow(S,interpolation="nearest")#,vmin=0.5,vmax=2.)
             pylab.title("[%f - %f]"%(S.min(),S.max()))
         pylab.draw()
         pylab.show(False)
@@ -205,7 +243,8 @@ class ClassGammaMachine():
             A=self.L_SqrtCov[iz]
             x=LX[iz].reshape((-1,1))
             y=(A.dot(x)).reshape((self.NPix,self.NPix))
-            GammaCube[iz,:,:]=1.+y
+            # GammaCube[iz,:,:]=1.+y
+            GammaCube[iz,:,:]=10**(y)
         T.timeit("Slices")
         self.GammaCube=GammaCube
 
