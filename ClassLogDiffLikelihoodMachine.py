@@ -55,14 +55,18 @@ class ClassLikelihoodMachine():
         SumNx_0=np.sum(n_z.reshape(-1,1,1)*GM.GammaCube)*self.CellRad_0**2
         Nx_1=np.zeros((Ns,),np.float32)
         Ax_1=np.zeros((Ns,),np.float32)
+        L_Ax_1_z=[]
         for iSlice in range(self.NSlice):
             Gamma_i=GM.GammaCube[iSlice].flat[self.IndexCube_xy_Slice]
             Nx_1[:]+=n_z[iSlice]*Gamma_i*self.CellRad_1**2
-            Ax_1[:]+=np.log10(n_zt[:,iSlice]*Gamma_i*self.CellRad_1**2)
+            Ax_1_z=n_zt[:,iSlice]*Gamma_i*self.CellRad_1**2
+            Ax_1[:]+=Ax_1_z
+            L_Ax_1_z.append(Ax_1_z)
         SumNx_1=np.sum(Nx_1)
+        self.Ax_1_z=np.array(L_Ax_1_z)
         
-        SumAx_1=np.sum(Ax_1)
-        return -SumNx_0 + SumNx_1 + SumAx_1 + - (1/2.)*np.dot(g.T,g)
+        SumAx_1=np.sum(np.log10(Ax_1))
+        return -SumNx_0 + SumNx_1 + SumAx_1 - (1/2.)*np.dot(g.T,g)
 
     def dLdg(self,g):
         g=g0.reshape((-1,1))
@@ -74,6 +78,8 @@ class ClassLikelihoodMachine():
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
         n_zt=self.CM.Cat_s.n_zt
 
+        Sum_z_Ax_1_z=np.sum(self.Ax_1_z,axis=0)
+            
         ii=0
         J=np.zeros((NParms,),np.float32)
         for iSlice in range(self.NSlice):
@@ -84,8 +90,11 @@ class ClassLikelihoodMachine():
             GammaSlice=GM.GammaCube[iSlice]
             SqrtCov=L_SqrtCov[iSlice]
             
-            dNx_0_dg=n_z[iSlice]*np.sum(SqrtCov[:,:]*GammaSlice.reshape((-1,1)),axis=0)*self.CellRad_0**2
-            SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,:]
-            dNx_1_dg=n_z[iSlice]*np.sum(SqrtCov_xy[:,:]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1)),axis=0)*self.CellRad_1**2
+            dNx_0_dg=n_z[iSlice]*np.sum(SqrtCov[:,iPar:jPar]*GammaSlice.reshape((-1,1)),axis=0)*self.CellRad_0**2
+            SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,iPar:jPar]
+            dNx_1_dg=n_z[iSlice]*np.sum(SqrtCov_xy[:,iPar:jPar]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1)),axis=0)*self.CellRad_1**2
+            
+            dAx_dg_0=n_zt[:,iSlice]*SqrtCov_xy[:,iPar:jPar]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))
+            dAx_dg_1=Sum_z_Ax_1_z
             
 
