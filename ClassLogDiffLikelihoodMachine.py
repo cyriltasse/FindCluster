@@ -74,6 +74,8 @@ class ClassLikelihoodMachine():
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
         n_zt=self.CM.Cat_s.n_zt
 
+        MatA=np.zeros((Ns,NParms),np.float32)
+        n_zt.reshape((Ns,self.NSlice))*SqrtCov_xy.reshape((Ns,NParms))*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))
         ii=0
         J=np.zeros((NParms,),np.float32)
         for iSlice in range(self.NSlice):
@@ -87,5 +89,6 @@ class ClassLikelihoodMachine():
             dNx_0_dg=n_z[iSlice]*np.sum(SqrtCov[:,:]*GammaSlice.reshape((-1,1)),axis=0)*self.CellRad_0**2
             SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,:]
             dNx_1_dg=n_z[iSlice]*np.sum(SqrtCov_xy[:,:]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1)),axis=0)*self.CellRad_1**2
+            dAx_1_dg=np.sum(n_zt[:,iSlice]*SqrtCov_xy[:,:]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1)),axis=0)*self.CellRad_1**2
             
 
