@@ -21,6 +21,12 @@ from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 from DDFacet.Other import AsyncProcessPool
 from DDFacet.Array import shared_dict
 
+def GiveNXNYPanels(Ns,ratio=800/500):
+    nx=int(round(np.sqrt(Ns/ratio)))
+    ny=int(nx*ratio)
+    if nx*ny<Ns: ny+=1
+    return nx,ny
+
 class ClassGammaMachine():
     def __init__(self,
                  radec_main,
@@ -39,10 +45,11 @@ class ClassGammaMachine():
         self.NPix=NPix
         self.CellRad=CellDeg*np.pi/180
         self.zg=np.linspace(*zParms)
+        self.zmg=(self.zg[0:-1]+self.zg[1:])/2.
         self.Mode=Mode
         self.ScaleKpc=ScaleKpc
         self.rac_main,self.decc_main=self.radec_main=radec_main
-
+        self.CurrentX=None
         self.CoordMachine = ModCoord.ClassCoordConv(self.rac_main, self.decc_main)
         l0,m0=self.CoordMachine.radec2lm(self.rac, self.decc)
         #log.print( (l0,m0))
@@ -55,6 +62,11 @@ class ClassGammaMachine():
         self.rag=rag.reshape(lg.shape)
         self.decg=decg.reshape(lg.shape)
         self.lg,self.mg=lg,mg
+        
+        self.TypeSqrtC=np.float64
+        self.TypeCube=np.float64
+        #self.TypeSqrtC=np.float32
+        #self.TypeCube=np.float32
 
         i0=int(lg.min()/self.CellRad+N0)
         i1=i0+NPix+1
@@ -105,17 +117,18 @@ class ClassGammaMachine():
         Sig_kpc=ScaleFWHMkpc/f
         self.L_SqrtCov=[]
         self.L_Hinv=[]
-        
+        self.L_ssqs=[]
         for iz in range(self.NSlice):
             APP.runJob("_computeSVD:%i"%(iz),
                        self._computeSVD,
-                       args=(iz,Sig_kpc))#,serial=True)
+                       args=(iz,Sig_kpc),serial=True)
 
         APP.awaitJobResults("_computeSVD:*", progress="Compute SqrtCov")
         self.DicoCovSVD.reload()
         for iz in range(self.NSlice):
-            sqrtCs=self.DicoCovSVD["sqrtCs_%i"%iz].copy()
+            sqrtCs=(self.DicoCovSVD["sqrtCs_%i"%iz].copy())
             self.L_Hinv.append(self.DicoCovSVD["Hinv_%i"%iz].copy())
+            self.L_ssqs.append(self.DicoCovSVD["ssqs_%i"%iz].copy())
             self.L_SqrtCov.append(sqrtCs)
             self.L_NParms.append(sqrtCs.shape[1])
             
@@ -124,6 +137,7 @@ class ClassGammaMachine():
         
         DicoSave={"Parms":Parms,
                   "L_SqrtCov":self.L_SqrtCov,
+                  "L_ssqs":self.L_ssqs,
                   "L_NParms":self.L_NParms,
                   "L_Hinv":self.L_Hinv}
         
@@ -157,7 +171,9 @@ class ClassGammaMachine():
                              NPix=self.NPix,
                              zm=zm)
             #self.Scale_Cov_X="log"C.Scale_Cov_X
-            
+
+        print(":!::")
+        C=np.eye(self.NPix**2,self.NPix**2)
         Cs,Sparsity=self.toSparse(C)
         M=C.shape[0]
         log.print("  Non-zeros are %.1f%% of the matrix size [%ix%i]"%(Sparsity*100,M,M))
@@ -169,25 +185,37 @@ class ClassGammaMachine():
         k=M-1#int(np.min([M-1,k]))
         log.print("Choosing k=%i [M=%i]"%(k,M))
         self.k=k
-        Us,ss,Vs=scipy.sparse.linalg.svds(Cs,k=k)
+        print(":!::")
+        #Us,ss,Vs=scipy.sparse.linalg.svds(Cs,k=k)
+        Us,ss,Vs=np.linalg.svd(C)
+
         sss=ss[ss>0]
         log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
         ssqs=np.sqrt(ss)
+        ind=np.where(ssqs>0)[0]
+        S0=Us.shape
+
+        Us=Us[:,ind]
+        ssqs=ssqs.flat[ind]
         A= sqrtCs =Us*ssqs.reshape(1,ssqs.size)
+        # print(S0,Us.shape,ssqs.shape)
         
         Hinv=ModLinAlg.invSVD((A.T).dot(A))
+
         self.DicoCovSVD["sqrtCs_%i"%iz]=A
+        self.DicoCovSVD["ssqs_%i"%iz]=ssqs
         self.DicoCovSVD["Hinv_%i"%iz]=Hinv
             
     def CubeToVec(self,Cube):
         ii=0
-        Cube=np.complex64(Cube.copy())
+        Cube=self.TypeCube(Cube.copy())
         XOut=np.zeros((self.NParms,),np.float32)
         for iSlice in range(self.NSlice):
             N=self.L_NParms[iSlice]
             if N==0: continue
             Slice=Cube[iSlice]
-            y=Slice.reshape((-1,1))-1.
+            #y=Slice.reshape((-1,1))-1.
+            y=np.log10(Slice.reshape((-1,1)))
             A=self.L_SqrtCov[iSlice]
             x0=(A.T).dot(y)
             Hinv=self.L_Hinv[iSlice]#ModLinAlg.invSVD((A.T).dot(A))
@@ -196,20 +224,32 @@ class ClassGammaMachine():
             XOut[ii:ii+N]=(x.real.ravel())[:]
             ii+=N
         return XOut
-            
-    def PlotGammaCube(self,Cube=None,FigName="Gamma Cube",OutName=None):
+
+    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None):
+        # return
+        if X is not None:
+            self.computeGammaCube(X)
         if Cube is None:
             Cube=self.GammaCube
+
         import pylab
-        fig=pylab.figure(FigName)
+
+        figsize=(13,8)
+        fig=pylab.figure(FigName,figsize=figsize)
+        self.CurrentFig=fig
+        self.AxList=[]
+        Nx,Ny=GiveNXNYPanels(self.NSlice,ratio=figsize[0]/figsize[1])
         pylab.clf()
-        for iPlot in range(9):
+
+        for iPlot in range(self.NSlice):
             S=Cube[iPlot]
-            pylab.subplot(3,3,iPlot+1)
+            ax=pylab.subplot(Nx,Ny,iPlot+1)
+            self.AxList.append(ax)
+            if np.count_nonzero(np.isnan(S))>0: stop
             pylab.imshow(S,interpolation="nearest")#,vmin=0.5,vmax=2.)
             pylab.title("[%f - %f]"%(S.min(),S.max()))
         pylab.draw()
-        pylab.show(False)
+        pylab.show(block=False)
         pylab.pause(0.1)
         if OutName: fig.savefig(OutName)
         
@@ -225,6 +265,10 @@ class ClassGammaMachine():
 
 
     def computeGammaCube(self,X):
+        if self.CurrentX is not None:
+            if np.allclose(self.CurrentX,X): return
+        self.CurrentX=X.copy()
+        
         LX=[]
         ii=0
         T=ClassTimeIt.ClassTimeIt("Gamma")
@@ -238,13 +282,18 @@ class ClassGammaMachine():
             LX.append(X[ii:ii+self.L_NParms[iSlice]])
             ii+=N
         T.timeit("unpack")
-        GammaCube=np.zeros((self.zg.size-1,self.NPix,self.NPix),np.float32)
+        GammaCube=np.zeros((self.zg.size-1,self.NPix,self.NPix),self.TypeCube)
         for iz in range(self.zg.size-1):
             A=self.L_SqrtCov[iz]
             x=LX[iz].reshape((-1,1))
-            y=(A.dot(x)).reshape((self.NPix,self.NPix))
+            #y=(A.dot(x)).reshape((self.NPix,self.NPix))
+            y=np.dot(self.TypeSqrtC(A),self.TypeSqrtC(x)).reshape((self.NPix,self.NPix))
             # GammaCube[iz,:,:]=1.+y
             GammaCube[iz,:,:]=10**(y)
         T.timeit("Slices")
         self.GammaCube=GammaCube
 
+    def giveGammaCube(self,X):
+        self.computeGammaCube(X)
+        return self.GammaCube
+    

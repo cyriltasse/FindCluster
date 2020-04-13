@@ -121,10 +121,12 @@ class ClassCovMatrix():
         
         Im=pydtfe.map_dtfe3d(Xp,Yp,Zp,x_m, y_m, z_m)
         log.print("    done!")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         Im[np.isnan(Im)]=0.
+
         MinNonZero=(Im[Im>0]).min()
         Im[Im<=0]=MinNonZero
-
+        
 
             
         #Dx=300
