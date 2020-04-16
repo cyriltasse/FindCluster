@@ -112,6 +112,7 @@ class ClassGammaMachine():
                 self.L_SqrtCov=DicoSave["L_SqrtCov"]
                 self.L_NParms=DicoSave["L_NParms"]
                 self.L_Hinv=DicoSave["L_Hinv"]
+                self.L_ssqs=DicoSave["L_ssqs"]
                 self.NParms=np.sum(self.L_NParms)
                 log.print("Number of free parameters %i"%self.NParms)
                 log.print("  with ScaleCov=%s"%self.ScaleCov)

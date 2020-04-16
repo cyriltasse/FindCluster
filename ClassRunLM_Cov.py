@@ -55,10 +55,21 @@ def test(DoPlot=False,ComputeInitCube=False):
                              DoPlot=DoPlot,
                              ComputeInitCube=ComputeInitCube)
     
-    g=LMMachine.runLM()
-    g=LMMachine.runMCMC()
+    # g=LMMachine.runLM()
+    # np.save("gEst.npy",g)
+    g=np.load("gEst.npy")
+    #    LMMachine.runMCMC(g)#LMMachine.XSimul.ravel())
+    
+    LMMachine.InitDicoChains(LMMachine.XSimul.ravel())
+    LMMachine.runMCMC()
     
 
+def g_z(z):
+    a=4.
+    g=np.zeros_like(z)
+    ind=np.where((z>(1./a))&(z<a))[0]
+    g[ind]=1./z[ind]
+    return g
 
     
     
@@ -94,6 +105,11 @@ class ClassRunLM_Cov():
         self.logM_g=np.linspace(*self.logMParms)
 
         self.DistMachine=GeneDist.ClassDistMachine()
+        z=np.linspace(-10,10,1000)
+        g=g_z(z)
+        G=np.cumsum(g)
+        G/=G[-1]
+        self.DistMachine.setCumulDist(z,G)
 
         self.CLM=ClassLikelihoodMachine.ClassLikelihoodMachine(self.CM)
         self.CLM.MassFunction.setGammaGrid((self.CM.rac_main,self.CM.decc_main),
@@ -113,14 +129,14 @@ class ClassRunLM_Cov():
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
 
-        # ###########################
-        # self.finaliseInit()
-        # ###########################
-
         self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
         self.simulCat()
         self.CLM.ComputeIndexCube(self.NPix)
-        
+        self.MoveType="Stretch"
+        # ###########################
+        self.finaliseInit()
+        # ###########################
+
         # self.InitCube(Compute=ComputeInitCube)
         
         # self.CLM.InitDiffMatrices()
@@ -221,7 +237,7 @@ class ClassRunLM_Cov():
         # self.GM.PlotGammaCube(Cube=self.NCube,FigName="NCube")
 
 
-        self.XSimul=self.X=self.GM.CubeToVec(self.NCube)
+        # self.XSimul=self.X=self.GM.CubeToVec(self.NCube)
         
         
         
@@ -348,100 +364,298 @@ class ClassRunLM_Cov():
         # g0=np.zeros_like(g)
         # g0=np.random.randn(g.size)
         # Res=scipy.optimize.minimize(f,g0)
-            
 
+    # ####################################################
+    # ############# MCMC
+    # ####################################################
+        
+    def InitDicoChains(self,XInit):
+        self.gStart=XInit.copy()        
+        log.print("Initialise Markov Chains...")
+        self.NChain,self.NDim=XInit.size,XInit.size
+        STD=np.max([1e-3,np.std(XInit)])
+        self.DicoChains["X"]=np.random.randn(self.NChain,self.NDim)*STD+XInit.reshape((1,-1))
+        self.DicoChains["ChainCube"]=np.zeros((self.NChain,self.NSlice,self.NPix,self.NPix),np.float32)
 
-    def runMCMC(self,g0):
-        T=ClassTimeIt.ClassTimeIt()
-        T.disable()
-        g=g0
-        L=self.CLM.L(g)
+        #self.DicoChains["X"]=(10**(np.linspace(-1,4,self.NChain))).reshape((self.NChain,self.NDim))*XInit.reshape((1,-1))
+
         
-        GM=self.CLM.MassFunction.GammaMachine
-        L_NParms=GM.L_NParms
-            
-        iStep=0
-        Alpha=1.
-        L_L=[L]
-        L_g=[g]
+        self.DicoChains["L"]=np.zeros((self.NChain,),np.float64)
         
+        for iChain in range(self.NChain):
+            APP.runJob("_evalChain:%i"%(iChain), 
+                       self._evalChain,
+                       args=(iChain,))#,serial=True)
+        APP.awaitJobResults("_evalChain:*", progress="Compute L for init")
+        self.DicoChains["Accepted"]=np.zeros((self.NChain,),int)
+        #self.PlotL()
+        
+    def _evalChain(self,iChain):
+        self.DicoChains.reload()
+        x=self.DicoChains["X"][iChain]
+        self.DicoChains["L"][iChain]=self.CLM.L(x)
+
+    def _evolveChainStretch(self,iChain,Sigma):
+        self.DicoChains.reload()
+
+        NChain,NDim=self.DicoChains["X"].shape
         while True:
-            T.reinit()
+            k=int(np.random.rand(1)[0]*NChain)
+            H=NChain//2
+            if iChain>=H:
+                Cond1=(k<H)
+            else:
+                Cond1=(k>=H)
+            if (k!=iChain)&(Cond1): break
+                
+        z=self.DistMachine.GiveSample(1)[0]
+        X0=self.DicoChains["X"][iChain]
+        X1=self.DicoChains["X"][k]
+        
+        X2=X0+z*(X1-X0)
+            
+        L1=self.CLM.L(X2)
+        L0=self.DicoChains["L"][iChain]
+        #
+        dd=L1-L0+(NDim-1)*np.log(z)
+        if dd>10.:
+            pp=1.
+        else:
+            pp=np.exp(dd)
+            #pp=np.exp(L1-L0)
+        p=np.min([1,pp])
+        #print "   %f, %f --> %f"%(L1,L0,p)
+        r=np.random.rand(1)[0]
+        if r<p:
+            self.DicoChains["X"][iChain]=X2[:]
+            self.DicoChains["L"][iChain]=L1
+            self.DicoChains["Accepted"][iChain]=1
+            self.DicoChains["ChainCube"][iChain][...]=self.CLM.MassFunction.GammaMachine.GammaCube[...]
+        else:
+            self.DicoChains["Accepted"][iChain]=0
+        
+    def runMCMC(self):
+        
+        
+        log.print("Run MCMC...")
+        self.ListX=[]
+        self.ListL=[]
+        self.Accepted=self.DicoChains["Accepted"]
+        iDone=0
+        if self.MoveType=="Stretch":
+            EvolveFunc=self._evolveChainStretch
+        elif self.MoveType=="Walk":
+            EvolveFunc=self._evolveChainWalk
+        Sigma=1.
+        LAccepted=[]
+        while True:
+            for iChain in range(self.NChain):
+                APP.runJob("_evolveChain:%i"%(iChain), 
+                           EvolveFunc,
+                           args=(iChain,Sigma))#,serial=True)
+            APP.awaitJobResults("_evolveChain:*", progress="Compute step %i"%iDone)
+            ff=np.count_nonzero(self.Accepted)/float(self.Accepted.size)
+            LAccepted.append(ff)
+            log.print("Accepted fraction %.3f"%ff)
+            if (len(LAccepted)>10) and (len(LAccepted)%10==0):
+                FAcc=np.mean(LAccepted[-10::])
+                log.print("  Mean accepted fraction %.3f"%FAcc)
+                if FAcc>0.5:
+                    Sigma*=1.05
+                    log.print("    Accelerating proposal distribution (Sigma=%f)"%Sigma)
+                elif FAcc<0.2:
+                    Sigma*=0.95
+                    log.print("    Decelerating proposal distribution (Sigma=%f)"%Sigma)
+                    
+            
+            if iDone%10==0:
+                self.PlotChains2(OutName="Test%6.6i.png"%iDone)
+            iDone+=1
 
-            T.timeit("Compute L")
-            g1=g+Alpha*np.random.randn(*g.shape)
-            L1=self.CLM.L(g1)
-            
-            if iStep>0:
-                if L<L_L[-1]:
-                    fact=1.5
-                    log.print("decreasing Alpha: %f -> %f"%(Alpha,Alpha/fact))
-                    Alpha/=fact
-                    g=L_g[-1]
-                    continue
-                elif L!=L_L[-1]:
-                    log.print("  dL=%f"%(L-L_L[-1]))
-                    dgest=np.median(np.abs(g-L_g[-1]))
-                    log.print("  dg=%f"%(dgest))
-                    if dgest<1e-4:
-                        return g
-            L_g.append(g.copy())
-            L_L.append(L)
-            
-            log.print("Likelihood = %.5f"%(L))
-            dldg=self.CLM.dLdg(g).flat[:]
-            T.timeit("Compute J")
-            dJdg=self.CLM.dJdg(g).flat[:]
-            T.timeit("Compute H")
-            # epsilon=np.sum(dldg**2)/np.sum(dldg**2*dJdg)
-            # Alpha=1000*np.abs(epsilon)
-            # print(epsilon)
-            
-            dldg=1/(1 + np.exp(-dldg))-0.5
-            g.flat[:] += Alpha*dldg
-            T.timeit("Step i+1")
+        
+    def PlotChains2(self,OutName="Test"):
+        
+        MeanGammaStack=np.zeros_like(self.GM.GammaCube)
+        for iChain in range(self.NChain):
+            MeanGammaStack+=self.GM.giveGammaCube(self.DicoChains["X"][iChain])
+        MeanGammaStack/=self.NChain
+        
+        StdGammaStack=np.zeros_like(self.GM.GammaCube)
+        for iChain in range(self.NChain):
+            StdGammaStack+=(self.GM.giveGammaCube(self.DicoChains["X"][iChain])-MeanGammaStack)**2
+        StdGammaStack/=self.NChain
+        StdGammaStack=np.sqrt(StdGammaStack)
 
-            pylab.figure("hist")
-            pylab.clf()
-            ii=0
-            for iSlice in range(self.CLM.NSlice):
-                ThisNParms=L_NParms[iSlice]
-                iPar=ii
-                jPar=iPar+ThisNParms
-                ii+=ThisNParms
-                pylab.subplot(2,2,1)
-                pylab.plot(dldg[iPar:jPar])
-            pylab.subplot(2,2,2)
-            pylab.plot(L_L)
-            
-            Sig=np.sqrt(np.abs(dJdg))
-            Gamma=self.GM.giveGammaCube(g)
-            e_Gamma=np.abs(Gamma-self.GM.giveGammaCube(g+Sig))
+        # ##########################
+        CubeStart=self.GM.giveGammaCube(self.gStart)
+        e_Gamma=StdGammaStack
+        Gamma=MeanGammaStack
+        y0=Gamma.flatten()-e_Gamma.flatten()
+        y1=Gamma.flatten()+e_Gamma.flatten()
+        x=np.arange(y0.size)
+        ysim=self.CubeSimul.flatten()
+        ystart=CubeStart.flatten()
+        ymean=MeanGammaStack.flatten()
+        pylab.figure("hist")
+        pylab.clf()
+        ax=pylab.subplot(1,2,1)
+        ax.fill_between(x,y0-ysim,y1-ysim, facecolor='gray', alpha=0.5)
+        pylab.plot(ymean-ysim,color="black")
+        pylab.plot(ystart-ysim,ls=":",color="black")
+        #pylab.plot(ysim,ls="--",color="black")
+        
 
-            ax=pylab.subplot(2,2,3)
-            y0=Gamma.flatten()-e_Gamma.flatten()
-            y1=Gamma.flatten()+e_Gamma.flatten()
-            x=np.arange(y0.size)
-            ax.fill_between(x,y0,y1, facecolor='gray', alpha=0.5)
-            pylab.plot(Gamma.flatten(),color="black")
-            pylab.plot(self.CubeSimul.flatten(),ls="--",color="black")
+        ax=pylab.subplot(1,2,2)
+        v=((MeanGammaStack-self.CubeSimul)/StdGammaStack).flat[:] # pylab.hist(,bins=50)
+        C=GeneDist.ClassDistMachine()
+        x,y=C.giveCumulDist(v,Ns=100,Norm=True)
+        x1,y1=C.giveCumulDist(np.random.randn(1000),Ns=100,Norm=True)
+        pylab.plot(x,y,color="black")
+        pylab.plot(x1,y1,ls=":",color="black")
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.1)
 
-            ax=pylab.subplot(2,2,4)
-            y0=Gamma.flatten()-e_Gamma.flatten()
-            y1=Gamma.flatten()+e_Gamma.flatten()
-            ys=self.CubeSimul.flatten()
-            x=np.arange(y0.size)
-            ax.fill_between(x,y0-ys,y1-ys, facecolor='gray', alpha=0.5)
-            pylab.plot(Gamma.flatten()-ys,color="black")
-            pylab.draw()
-            pylab.show(block=False)
-            pylab.pause(0.1)
-            T.timeit("Plot Sim")
-            
-            iStep+=1
+        # ax=pylab.subplot(1,2,2)
+        # y0=Gamma.flatten()-e_Gamma.flatten()
+        # y1=Gamma.flatten()+e_Gamma.flatten()
+        # ys=self.CubeSimul.flatten()
+        # x=np.arange(y0.size)
+        # ax.fill_between(x,y0-ys,y1-ys, facecolor='gray', alpha=0.5)
+        # pylab.plot(Gamma.flatten()-ys,color="black")
 
-        # g0=np.zeros_like(g)
-        # g0=np.random.randn(g.size)
-        # Res=scipy.optimize.minimize(f,g0)
+
+        # self.GM.PlotGammaCube(Cube=(MeanGammaStack-self.CubeSimul)/StdGammaStack)
+
+        
+        return
+        GammaCube=self.CubeInit
+        # ra0,ra1=self.CSC.rag.min(),self.CSC.rag.max()
+        # dec0,dec1=self.CSC.decg.min(),self.CSC.decg.max()
+        # self.extent=ra0,ra1,dec0,dec1
+        aspect="auto"
+        #pylab.ion()
+        self.DicoChains.reload()
+        XMean=np.mean(self.DicoChains["X"],axis=0)
+        CubeMean=np.mean(self.DicoChains["ChainCube"],axis=0)
+        #CubeMean/=self.NChain
+        
+        self.CLM.MassFunction.updateGammaCube(XMean)
+        #print CubeMean-self.CLM.MassFunction.GammaMachine.GammaCube
+        self.CLM.MassFunction.GammaMachine.PlotGammaCube(Cube=CubeMean,
+                                                         FigName="Mean posterior",
+                                                         OutName=OutName)
+
+
+
+
+
+
+
+
+        
+    # def runMCMC(self,g0,NBurn=100):
+        
+    #     T=ClassTimeIt.ClassTimeIt()
+    #     T.disable()
+    #     gStart=g0.copy()
+    #     g=g0
+    #     L=self.CLM.L(g)
+        
+    #     GM=self.CLM.MassFunction.GammaMachine
+    #     L_NParms=GM.L_NParms
+    #     ssqs=np.concatenate(self.GM.L_ssqs)
+        
+    #     iStep=0
+    #     iAccepted=0
+    #     Alpha=1.
+    #     L_L=[L]
+    #     L_g=[g]
+    #     L_Accept=[]
+    #     while True:
+    #         T.reinit()
+
+    #         T.timeit("Compute L")
+    #         g1=g+Alpha*np.random.randn(*g.shape)/ssqs
+    #         L1=self.CLM.L(g1)
+    #         if L1>L:
+    #             AcceptThis=True
+    #         else:
+    #             P=np.exp(L1-L)
+    #             if np.random.rand(1)[0]<P:
+    #                 AcceptThis=True
+    #             else:
+    #                 AcceptThis=False
+    #         L_Accept.append(AcceptThis)
+    #         NSurveyAcc=100
+    #         print(iStep)
+    #         if len(L_Accept)>NSurveyAcc and iStep%10==0:
+    #             Frac=1.2
+    #             L_Accept_s=L_Accept[-NSurveyAcc:]
+    #             fAccepted=np.count_nonzero(L_Accept_s)/len(L_Accept_s)
+    #             log.print("Accepted fraction %.1f %%"%(100*fAccepted))
+
+    #             if fAccepted<0.2:
+    #                 log.print("  decreasing alpha %.5f -> %.5f"%(Alpha,Alpha/Frac))
+    #                 Alpha/=Frac
+    #             elif fAccepted>0.5:
+    #                 log.print("  increasing alpha %.5f -> %.5f"%(Alpha,Alpha*Frac))
+    #                 Alpha*=Frac
+                    
+                              
             
+    #         if AcceptThis:
+    #             if iAccepted>NBurn:
+    #                 g=g1.copy()
+    #                 L_g.append(g1)
+    #                 L_L.append(L1)
+    #             iAccepted+=1
+                
+                
+    #         iStep+=1
+            
+    #         if iStep>2000:
+    #             break
+            
+    #     # End while
+    #     NStack=len(L_g)#100
+    #     MeanGammaStack=np.zeros_like(self.GM.GammaCube)
+    #     for i in range(NStack):
+    #         MeanGammaStack+=self.GM.giveGammaCube(L_g[i-NStack])
+    #     MeanGammaStack/=NStack
+        
+    #     StdGammaStack=np.zeros_like(self.GM.GammaCube)
+    #     for i in range(NStack):
+    #         StdGammaStack+=(self.GM.giveGammaCube(L_g[i-NStack])-MeanGammaStack)**2
+    #     StdGammaStack/=NStack
+    #     StdGammaStack=np.sqrt(StdGammaStack)
+
+    #     # ##########################
+    #     CubeStart=self.GM.giveGammaCube(gStart)
+    #     e_Gamma=StdGammaStack
+    #     Gamma=MeanGammaStack
+    #     y0=Gamma.flatten()-e_Gamma.flatten()
+    #     y1=Gamma.flatten()+e_Gamma.flatten()
+    #     x=np.arange(y0.size)
+
+    #     ax=pylab.subplot(1,1,1)
+    #     ax.fill_between(x,y0,y1, facecolor='gray', alpha=0.5)
+    #     pylab.plot(Gamma.flatten(),color="black")
+    #     pylab.plot(CubeStart.flatten(),ls=":",color="black")
+    #     pylab.plot(self.CubeSimul.flatten(),ls="--",color="black")
+    #     pylab.plot(ssqs)
+    #     # ax=pylab.subplot(1,2,2)
+    #     # y0=Gamma.flatten()-e_Gamma.flatten()
+    #     # y1=Gamma.flatten()+e_Gamma.flatten()
+    #     # ys=self.CubeSimul.flatten()
+    #     # x=np.arange(y0.size)
+    #     # ax.fill_between(x,y0-ys,y1-ys, facecolor='gray', alpha=0.5)
+    #     # pylab.plot(Gamma.flatten()-ys,color="black")
+        
+    #     pylab.draw()
+    #     pylab.show(block=False)
+    #     pylab.pause(0.1)
+
+    #     return MeanGammaStack,StdGammaStack
+        
         
