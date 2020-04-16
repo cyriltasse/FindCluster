@@ -106,11 +106,16 @@ class ClassGammaMachine():
             DicoSave=MyPickle.Load(FileOut)
             if DicoSave["Parms"]==Parms:
                 log.print("   all parameters are the same... ")
+                self.MaxValueSigmoid=DicoSave["MaxValueSigmoid"]
+                self.a_Sigmoid=DicoSave["a_Sigmoid"]
+                self.ScaleCov=DicoSave["ScaleCov"]
                 self.L_SqrtCov=DicoSave["L_SqrtCov"]
                 self.L_NParms=DicoSave["L_NParms"]
                 self.L_Hinv=DicoSave["L_Hinv"]
                 self.NParms=np.sum(self.L_NParms)
                 log.print("Number of free parameters %i"%self.NParms)
+                log.print("  with ScaleCov=%s"%self.ScaleCov)
+                
                 return
             
         f=2.*np.sqrt(2.*np.log(2.))
@@ -131,16 +136,20 @@ class ClassGammaMachine():
             self.L_ssqs.append(self.DicoCovSVD["ssqs_%i"%iz].copy())
             self.L_SqrtCov.append(sqrtCs)
             self.L_NParms.append(sqrtCs.shape[1])
-            
         self.NParms=np.sum(self.L_NParms)
         log.print("Number of free parameters %i"%self.NParms)
         
         DicoSave={"Parms":Parms,
+                  "ScaleCov":self.DicoCovSVD["ScaleCov_%i"%iz],
+                  "a_Sigmoid":self.DicoCovSVD["a_Sigmoid_%i"%iz],
+                  "MaxValueSigmoid":self.DicoCovSVD["MaxValueSigmoid_%i"%iz],
                   "L_SqrtCov":self.L_SqrtCov,
                   "L_ssqs":self.L_ssqs,
                   "L_NParms":self.L_NParms,
                   "L_Hinv":self.L_Hinv}
-        
+        self.ScaleCov=DicoSave["ScaleCov"]
+        self.a_Sigmoid=DicoSave["a_Sigmoid"]
+        self.MaxValueSigmoid=DicoSave["MaxValueSigmoid"]
         log.print("Saving sqrt(Cov) in %s"%FileOut)
         MyPickle.Save(DicoSave,FileOut)
         
@@ -170,10 +179,11 @@ class ClassGammaMachine():
             C=CCM.giveCovMat(CellSizeRad=self.CellRad,
                              NPix=self.NPix,
                              zm=zm)
+            
             #self.Scale_Cov_X="log"C.Scale_Cov_X
 
-        print(":!::")
-        C=np.eye(self.NPix**2,self.NPix**2)
+        #print(":!::")
+        #C=np.eye(self.NPix**2,self.NPix**2)
         Cs,Sparsity=self.toSparse(C)
         M=C.shape[0]
         log.print("  Non-zeros are %.1f%% of the matrix size [%ix%i]"%(Sparsity*100,M,M))
@@ -185,14 +195,16 @@ class ClassGammaMachine():
         k=M-1#int(np.min([M-1,k]))
         log.print("Choosing k=%i [M=%i]"%(k,M))
         self.k=k
-        print(":!::")
+        #print(":!::")
         #Us,ss,Vs=scipy.sparse.linalg.svds(Cs,k=k)
         Us,ss,Vs=np.linalg.svd(C)
 
         sss=ss[ss>0]
         log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
         ssqs=np.sqrt(ss)
+        
         ind=np.where(ssqs>0)[0]
+        ind=np.where(ssqs>1e-3*ssqs.max())[0]
         S0=Us.shape
 
         Us=Us[:,ind]
@@ -205,6 +217,9 @@ class ClassGammaMachine():
         self.DicoCovSVD["sqrtCs_%i"%iz]=A
         self.DicoCovSVD["ssqs_%i"%iz]=ssqs
         self.DicoCovSVD["Hinv_%i"%iz]=Hinv
+        self.DicoCovSVD["MaxValueSigmoid_%i"%iz]=CCM.MaxValueSigmoid
+        self.DicoCovSVD["ScaleCov_%i"%iz]=CCM.ScaleCov
+        self.DicoCovSVD["a_Sigmoid_%i"%iz]=CCM.a_Sigmoid
             
     def CubeToVec(self,Cube):
         ii=0
@@ -213,9 +228,13 @@ class ClassGammaMachine():
         for iSlice in range(self.NSlice):
             N=self.L_NParms[iSlice]
             if N==0: continue
-            Slice=Cube[iSlice]
+            Slice=Cube[iSlice].copy()
+            Slice[Slice==0]=1e-6
             #y=Slice.reshape((-1,1))-1.
-            y=np.log10(Slice.reshape((-1,1)))
+            if self.ScaleCov=="log":
+                y=np.log(Slice.reshape((-1,1)))
+            elif self.ScaleCov=="Sigmoid":
+                y=ClassCovMatrix_Sim3D_2.Logit(x,a_Sigmoid=self.a_Sigmoid,MaxVal=self.MaxValueSigmoid)
             A=self.L_SqrtCov[iSlice]
             x0=(A.T).dot(y)
             Hinv=self.L_Hinv[iSlice]#ModLinAlg.invSVD((A.T).dot(A))
@@ -247,7 +266,7 @@ class ClassGammaMachine():
             self.AxList.append(ax)
             if np.count_nonzero(np.isnan(S))>0: stop
             pylab.imshow(S,interpolation="nearest")#,vmin=0.5,vmax=2.)
-            pylab.title("[%f - %f]"%(S.min(),S.max()))
+            pylab.title("[%.2f - %.2f]"%(S.min(),S.max()))
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
@@ -265,8 +284,11 @@ class ClassGammaMachine():
 
 
     def computeGammaCube(self,X):
+
         if self.CurrentX is not None:
-            if np.allclose(self.CurrentX,X): return
+            if np.allclose(self.CurrentX,X):
+                log.print("Current cube ok, skipping computation...")
+                return
         self.CurrentX=X.copy()
         
         LX=[]
@@ -289,7 +311,12 @@ class ClassGammaMachine():
             #y=(A.dot(x)).reshape((self.NPix,self.NPix))
             y=np.dot(self.TypeSqrtC(A),self.TypeSqrtC(x)).reshape((self.NPix,self.NPix))
             # GammaCube[iz,:,:]=1.+y
-            GammaCube[iz,:,:]=10**(y)
+            
+            if self.ScaleCov=="log":
+                GammaCube[iz,:,:]=np.exp(y)
+            elif self.ScaleCov=="Sigmoid":
+                GammaCube[iz,:,:]=ClassCovMatrix_Sim3D_2.Sigmoid(y,a=self.a_Sigmoid,MaxVal=self.MaxValueSigmoid)
+                stop
         T.timeit("Slices")
         self.GammaCube=GammaCube
 

@@ -52,7 +52,7 @@ class ClassLikelihoodMachine():
         L0=self.L(g,DoPlot=DoPlot)
 
         dL_dg0=self.dLdg(g)
-        NN=g.size
+        NN=10#g.size
         dg=.001
         dL_dg1=np.zeros((NN,),np.float64)
         Parm_id=np.arange(NN)
@@ -73,15 +73,15 @@ class ClassLikelihoodMachine():
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
-        stop
 
-                
+
     def L(self,g0,DoPlot=0):
         GM=self.MassFunction.GammaMachine
         g0=np.float64(g0)
+        
         GM.computeGammaCube(g0)
         self.CellRad_0=self.MassFunction.GammaMachine.CellRad
-        self.CellRad_1=(.001/3600)*np.pi/180
+        self.CellRad_1=(.00001/3600)*np.pi/180
 
         g=g0.reshape((-1,1))
         L_SqrtCov=GM.L_SqrtCov
@@ -94,16 +94,22 @@ class ClassLikelihoodMachine():
         #TypeSum=np.float32
 
         
-        #print(":!::")
+        # self.funcNormLog=np.log10
+        # self.fNormLog=np.log(10)
+
+        self.funcNormLog=np.log
+        self.fNormLog=1.
+
+        
         if DoPlot: GM.PlotGammaCube(Cube=GM.GammaCube,FigName="JacobCube")
         # SumNx_0=np.sum(TypeSum((n_z.reshape(-1,1,1)*self.CellRad_0**2)*GM.GammaCube))
-        SumNx_0=np.sum(TypeSum(n_z.reshape(-1,1,1)*GM.GammaCube).flat[self.IndexCube_Mask])*self.CellRad_0**2/np.log(10)
+        SumNx_0=np.sum(TypeSum(n_z.reshape(-1,1,1)*GM.GammaCube).flat[self.IndexCube_Mask])*self.CellRad_0**2/self.fNormLog
         # SumNx_0=np.sum([TypeSum(n_z[i]*GM.GammaCube[i]).flat[self.IndexCube_Mask_Slice] for i in range(self.NSlice)])*self.CellRad_0**2
         #print("nz", (n_z*self.CellRad_0**2), SumNx_0)
         #print(GM.GammaCube)
         
         Nx_1=np.zeros((Ns,),np.float32)
-        #Ax_1=np.zeros((Ns,),np.float32)
+        # Ax_1=np.zeros((Ns,),np.float32)
         L_Ax_1_z=[]
         for iSlice in range(self.NSlice):
             Gamma_i=GM.GammaCube[iSlice].flat[self.IndexCube_xy_Slice]
@@ -115,21 +121,24 @@ class ClassLikelihoodMachine():
         self.Ax_1_z=np.array(L_Ax_1_z)
         self.Ax_1=np.sum(TypeSum(self.Ax_1_z),axis=0)
         
-        SumAx_1=np.sum(np.log(TypeSum(self.Ax_1)))
+        SumAx_1=np.sum(self.funcNormLog(TypeSum(self.Ax_1)))
         #print(SumNx_0, SumNx_1, SumAx_1)
-        L=-SumNx_0 + SumNx_1 + SumAx_1# - (1/2.)*np.dot(g.T,g).flat[0]
-        #L=-SumNx_0 + SumAx_1# - (1/2.)*np.dot(g.T,g).flat[0]
+        L=-SumNx_0 + SumNx_1 + SumAx_1 - (1/2.)*np.dot(g.T,g).flat[0]
+        # L=-SumNx_0 + SumAx_1# - (1/2.)*np.dot(g.T,g).flat[0]
         #L=-SumNx_0# - (1/2.)*np.dot(g.T,g).flat[0]
-        #L= + SumAx_1# - (1/2.)*np.dot(g.T,g).flat[0]
+        #L= + SumNx_1# - (1/2.)*np.dot(g.T,g).flat[0]
         #L= SumAx_1
-
+        self.gCurrentL=g0.copy()
         return L
 
     def dLdg(self,g0):
+
+        T=ClassTimeIt.ClassTimeIt()
+        T.disable()
         GM=self.MassFunction.GammaMachine
         GM.computeGammaCube(g0)
         g=g0.reshape((-1,1))
-
+        T.timeit("Compute Gamma")
         L_SqrtCov=GM.L_SqrtCov
         L_NParms=GM.L_NParms
         NParms=GM.NParms
@@ -137,7 +146,16 @@ class ClassLikelihoodMachine():
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
         n_zt=self.CM.Cat_s.n_zt
 
-        Sum_z_Ax_1_z=np.sum(self.Ax_1_z,axis=0)
+        # Sum_z_Ax_1_z=np.sum(self.Ax_1_z,axis=0)
+
+        L_Ax_1_z=[]
+        for iSlice in range(self.NSlice):
+            Gamma_i=GM.GammaCube[iSlice].flat[self.IndexCube_xy_Slice]
+            Ax_1_z=n_zt[:,iSlice]*Gamma_i*self.CellRad_1**2
+            L_Ax_1_z.append(Ax_1_z)
+        Ax_1_z=np.array(L_Ax_1_z)
+        Sum_z_Ax_1_z=np.sum(Ax_1_z,axis=0)
+        # print(GM.GammaCube.flat[0])
             
         ii=0
         J=np.zeros((NParms,),np.float32)
@@ -149,24 +167,131 @@ class ClassLikelihoodMachine():
             GammaSlice=GM.GammaCube[iSlice]
             SqrtCov=L_SqrtCov[iSlice]
             
-            dNx_0_dg=n_z[iSlice]*SqrtCov[:,:]*GammaSlice.reshape((-1,1))*self.CellRad_0**2/np.log(10)
-            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,:],axis=0)*np.log(10)
+            dNx_0_dg=n_z[iSlice]*SqrtCov[:,:]*GammaSlice.reshape((-1,1))*self.CellRad_0**2
+            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,:],axis=0)#*np.log(10)
             #Sum_dNx_0_dg=np.sum(dNx_0_dg,axis=0)*np.log(10)
             
             SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,:]
             dNx_1_dg=n_z[iSlice]*SqrtCov_xy[:,:]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))*self.CellRad_1**2
             Sum_dNx_1_dg=np.sum(dNx_1_dg,axis=0)
             
-            dAx_dg_0=n_zt[:,iSlice].reshape((-1,1))*SqrtCov_xy[:,:]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))
-            dAx_dg_1=Sum_z_Ax_1_z
-            dAx_dg=dAx_dg_0/dAx_dg_1.reshape((-1,1))*self.CellRad_1**2
+            dAx_dg_0 = n_zt[:,iSlice].reshape((-1,1))*SqrtCov_xy[:,:]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))#*np.log(10)
+            dAx_dg_1 = Sum_z_Ax_1_z
+            dAx_dg   = dAx_dg_0/dAx_dg_1.reshape((-1,1))*self.CellRad_1**2
+            #print("A",dAx_dg_0.flat[0],dAx_dg_1.flat[0])
             Sum_dAx_dg=np.sum(dAx_dg,axis=0)
             #print(Sum_dNx_0_dg.shape,Sum_dNx_1_dg.shape,Sum_dAx_dg.shape)
-            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg# - g0.flat[iPar:jPar]
+            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg - g0.flat[iPar:jPar]
+            #J[iPar:jPar]=  + Sum_dNx_1_dg
+            #J[iPar:jPar]= -Sum_dNx_0_dg
+
+            #J[iPar:jPar]= g0.flat[iPar:jPar]
+            #J[iPar:jPar]=  Sum_dAx_dg# - g0.flat[iPar:jPar]
             #J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg
             #J[iPar:jPar]=  + Sum_dAx_dg
             #J[iPar:jPar]= -Sum_dNx_0_dg
+            #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
+            ii+=ThisNParms
+        
+        return J
+
+    # #############################################
+
+    def measure_dJdg(self,g0,DoPlot=0):
+        g=g0.copy()
+        dJdg0=self.dJdg(g)
+
+        NN=10#g.size
+        dg=1e-2
+        dJdg1=np.zeros((NN,),np.float64)
+        Parm_id=np.arange(NN)
+
+        pylab.figure("Hessian")
+        pylab.clf()
+        pylab.plot(dJdg0[Parm_id])
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.1)
+        
+        dLdg_0=self.dLdg(g)
+        for i in range(NN):
+            print("%i/%i"%(i,NN))
+            g1=g.copy()
+            g1[Parm_id[i]]+=dg
+            dLdg_1=self.dLdg(g1)
+            print(dLdg_0[Parm_id[i]],dLdg_1[Parm_id[i]])
+            dJdg1[i]=(dLdg_0[Parm_id[i]]-dLdg_1[Parm_id[i]]) / ((g-g1)[Parm_id[i]])
+
+        # pylab.plot(dL_dg0[Parm_id]/dL_dg1)
+        pylab.plot(dJdg1)
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.1)
+
+        
+                
+    def dJdg(self,g0):
+
+        T=ClassTimeIt.ClassTimeIt()
+        T.disable()
+        GM=self.MassFunction.GammaMachine
+        GM.computeGammaCube(g0)
+        g=g0.reshape((-1,1))
+        T.timeit("Compute Gamma")
+        L_SqrtCov=GM.L_SqrtCov
+        L_NParms=GM.L_NParms
+        NParms=GM.NParms
+        Ns=self.CM.Cat_s.shape[0]
+        n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
+        n_zt=self.CM.Cat_s.n_zt
+
+        # Sum_z_Ax_1_z=np.sum(self.Ax_1_z,axis=0)
+        L_Ax_1_z=[]
+        for iSlice in range(self.NSlice):
+            Gamma_i=GM.GammaCube[iSlice].flat[self.IndexCube_xy_Slice]
+            Ax_1_z=n_zt[:,iSlice]*Gamma_i*self.CellRad_1**2
+            L_Ax_1_z.append(Ax_1_z)
+        Ax_1_z=np.array(L_Ax_1_z)
+        Sum_z_Ax_1_z=np.sum(Ax_1_z,axis=0)
             
+        ii=0
+        J=np.zeros((NParms,),np.float32)
+        for iSlice in range(self.NSlice):
+            ThisNParms=L_NParms[iSlice]
+            iPar=ii
+            jPar=iPar+ThisNParms
+            
+            GammaSlice=GM.GammaCube[iSlice]
+            SqrtCov=L_SqrtCov[iSlice]
+            
+            dNx_0_dg=n_z[iSlice] * (SqrtCov[:,:])**2 * GammaSlice.reshape((-1,1))*self.CellRad_0**2*self.fNormLog
+            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,:],axis=0)#*np.log(10)
+            #Sum_dNx_0_dg=np.sum(dNx_0_dg,axis=0)*np.log(10)
+            
+            SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,:]
+            dNx_1_dg=n_z[iSlice]*(SqrtCov_xy[:,:])**2 * GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))*self.CellRad_1**2
+            Sum_dNx_1_dg=np.sum(dNx_1_dg,axis=0)
+            
+            dAx_dg_0 = n_zt[:,iSlice].reshape((-1,1))* (SqrtCov_xy[:,:]) * GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))#*np.log(10)
+            dAx_dg_1 = Sum_z_Ax_1_z
+            
+            dAx_dg_A   = SqrtCov_xy[:,:]*dAx_dg_0 / dAx_dg_1.reshape((-1,1)) * self.CellRad_1**2
+
+            dAx_dg_B   = - ( (dAx_dg_0 * dAx_dg_0) * self.CellRad_1**4 / (dAx_dg_1.reshape((-1,1)))**2 )
+            
+            dAx_dg = dAx_dg_A + dAx_dg_B
+
+            Sum_dAx_dg=np.sum(dAx_dg,axis=0)
+            #print(Sum_dNx_0_dg.shape,Sum_dNx_1_dg.shape,Sum_dAx_dg.shape)
+            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg - 1.#g0.flat[iPar:jPar]
+            #J[iPar:jPar]= + Sum_dNx_1_dg
+            
+            #J[iPar:jPar]= g0.flat[iPar:jPar]
+            #J[iPar:jPar]=  Sum_dAx_dg# - g0.flat[iPar:jPar]
+            #J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg
+            #J[iPar:jPar]=  + Sum_dAx_dg
+            #J[iPar:jPar]= -Sum_dNx_0_dg
+            #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
             ii+=ThisNParms
         
         return J

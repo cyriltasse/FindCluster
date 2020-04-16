@@ -22,7 +22,15 @@ from DDFacet.Other import AsyncProcessPool
 from DDFacet.Array import shared_dict
 import plotly.graph_objects as go
 from scipy import interpolate
+import scipy.stats
 
+
+def Sigmoid(x,a=None,MaxVal=None):
+    return MaxVal*1./(1.+np.exp(-a*x))
+
+def logit(x0,a=None,MaxVal=None):
+    x=x0/MaxVal
+    return 1./a*np.log(x/(1.-x))
 
 def measureCovMat():
     CCM=ClassCovMatrix(ReComputeFromSim=True)
@@ -131,7 +139,24 @@ class ClassCovMatrix():
             
         #Dx=300
         #Im=Im[Dx:-Dx,Dx:-Dx]
-        self.DicoSim["Gamma"]=np.log10(Im/np.mean(Im))
+
+        Im/=np.mean(Im)
+
+
+        SigMAD=scipy.stats.median_absolute_deviation
+        Sig=SigMAD(Im.flat[:])
+
+        # self.a_Sigmoid=1./Sig
+        # self.MaxValue=Im.max()*1.1
+        # self.ScaleCov="Sigmoid"
+        # self.DicoSim["Gamma"]=logit(Im,MaxVal=self.MaxValue,a=self.a_Sigmoid)
+        
+        self.ScaleCov="log"
+        self.MaxValue=None
+        self.a_Sigmoid=None
+        self.DicoSim["Gamma"]=np.log(Im)
+
+        
         self.DicoSim["G"]=self.DicoSim["Gamma"]-np.mean(self.DicoSim["Gamma"])
         self.Gamma=self.DicoSim["Gamma"]
         
@@ -203,7 +228,10 @@ class ClassCovMatrix():
         log.print("Saving radial Cov in: %s"%FileOut)
         np.savez(FileOut,
                  R=R,
-                 Cov1d=Cov1d)
+                 Cov1d=Cov1d,
+                 MaxValue=self.MaxValue,
+                 a_Sigmoid=self.a_Sigmoid,
+                 ScaleCov=self.ScaleCov)
         
 
     def _computeCovNAt(self,LJobs):
@@ -229,10 +257,13 @@ class ClassCovMatrix():
         
     def giveCovMat(self,CellSizeRad=None,NPix=None,zm=None):
         
-        S=np.load("/data/tasse/DataDeepFields/Millenium_z_0.5_0.63.txt.RadialCov.npz")
+        S=np.load("/data/tasse/DataDeepFields/Millenium_z_0.5_0.63.txt.RadialCov.npz",allow_pickle=True)
         R=S["R"]
+        self.MaxValueSigmoid=S["MaxValue"][()]
+        self.a_Sigmoid=S["a_Sigmoid"][()]
+        self.ScaleCov=S["ScaleCov"][()]
+        
         Cov1d=S["Cov1d"]
-
         # R=R[1::]
         # Cov1d=Cov1d[1::]
 
