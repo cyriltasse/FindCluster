@@ -502,9 +502,9 @@ class ClassRunLM_Cov():
         ax.fill_between(x,y0-ysim,y1-ysim, facecolor='gray', alpha=0.5)
         pylab.plot(ymean-ysim,color="black")
         pylab.plot(ystart-ysim,ls=":",color="black")
-        #pylab.plot(ysim,ls="--",color="black")
+        ##pylab.plot(ysim,ls="--",color="black")
         
-
+ 
         ax=pylab.subplot(1,2,2)
         v=((MeanGammaStack-self.CubeSimul)/StdGammaStack).flat[:] # pylab.hist(,bins=50)
         C=GeneDist.ClassDistMachine()
