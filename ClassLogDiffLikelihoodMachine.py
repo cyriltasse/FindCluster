@@ -34,10 +34,10 @@ class ClassLikelihoodMachine():
 
         X,Y=self.CM.Cat_s.xCube,self.CM.Cat_s.yCube
         
-        # X=np.int64(np.random.rand(X.size)*NPix)
-        # Y=np.int64(np.random.rand(X.size)*NPix)
-        # X.fill(NPix//2)
-        # Y.fill(NPix//2)
+        # # X=np.int64(np.random.rand(X.size)*NPix)
+        # # Y=np.int64(np.random.rand(X.size)*NPix)
+        # # X.fill(NPix//2)
+        # # Y.fill(NPix//2)
         self.MassFunction.GammaMachine.ThisMask.fill(0)
         
         self.IndexCube_xy_Slice=(np.int64(X*NPix)+np.int64(Y)).flatten()
@@ -52,7 +52,7 @@ class ClassLikelihoodMachine():
         L0=self.L(g,DoPlot=DoPlot)
 
         dL_dg0=self.dLdg(g)
-        NN=10#g.size
+        NN=g.size
         dg=.001
         dL_dg1=np.zeros((NN,),np.float64)
         Parm_id=np.arange(NN)
@@ -123,7 +123,14 @@ class ClassLikelihoodMachine():
         
         SumAx_1=np.sum(self.funcNormLog(TypeSum(self.Ax_1)))
         #print(SumNx_0, SumNx_1, SumAx_1)
-        L=-SumNx_0 + SumNx_1 + SumAx_1 - (1/2.)*np.dot(g.T,g).flat[0]
+        L=-SumNx_0 + SumNx_1 + SumAx_1
+        self.MAP=1
+        if self.MAP:
+            k=g.size
+            gTg=np.dot(g.T,g).flat[0]+1e-10
+            L+= - (1/2.)*gTg + (k/2-1)*np.log(gTg)
+            #L+= - (1/2.)*gTg
+        #L=  (k/2-1)*np.log(gTg)
         # L=-SumNx_0 + SumAx_1# - (1/2.)*np.dot(g.T,g).flat[0]
         #L=-SumNx_0# - (1/2.)*np.dot(g.T,g).flat[0]
         #L= + SumNx_1# - (1/2.)*np.dot(g.T,g).flat[0]
@@ -181,7 +188,7 @@ class ClassLikelihoodMachine():
             #print("A",dAx_dg_0.flat[0],dAx_dg_1.flat[0])
             Sum_dAx_dg=np.sum(dAx_dg,axis=0)
             #print(Sum_dNx_0_dg.shape,Sum_dNx_1_dg.shape,Sum_dAx_dg.shape)
-            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg - g0.flat[iPar:jPar]
+            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg# - g0.flat[iPar:jPar] 
             #J[iPar:jPar]=  + Sum_dNx_1_dg
             #J[iPar:jPar]= -Sum_dNx_0_dg
 
@@ -192,7 +199,13 @@ class ClassLikelihoodMachine():
             #J[iPar:jPar]= -Sum_dNx_0_dg
             #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
             ii+=ThisNParms
-        
+
+        if self.MAP:
+            k=g0.size
+            gTg=np.sum(g0**2)+1e-10
+            J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
+            #J[:]+= -g0.flat[:]# + 2*(k/2-1)*g0.flat[:]/gTg
+        #J[:]+=  2*(k/2-1)*g0.flat[:]/gTg
         return J
 
     # #############################################
@@ -201,7 +214,7 @@ class ClassLikelihoodMachine():
         g=g0.copy()
         dJdg0=self.dJdg(g)
 
-        NN=10#g.size
+        NN=g.size
         dg=1e-2
         dJdg1=np.zeros((NN,),np.float64)
         Parm_id=np.arange(NN)
@@ -283,15 +296,16 @@ class ClassLikelihoodMachine():
 
             Sum_dAx_dg=np.sum(dAx_dg,axis=0)
             #print(Sum_dNx_0_dg.shape,Sum_dNx_1_dg.shape,Sum_dAx_dg.shape)
-            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg - 1.#g0.flat[iPar:jPar]
-            #J[iPar:jPar]= + Sum_dNx_1_dg
-            
-            #J[iPar:jPar]= g0.flat[iPar:jPar]
-            #J[iPar:jPar]=  Sum_dAx_dg# - g0.flat[iPar:jPar]
-            #J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg
-            #J[iPar:jPar]=  + Sum_dAx_dg
-            #J[iPar:jPar]= -Sum_dNx_0_dg
+            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg#g0.flat[iPar:jPar]
+            #J[iPar:jPar]= 0
             #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
             ii+=ThisNParms
+            
+        k=g0.size
+        gTg=np.sum(g0**2)+1e-10
+        #J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
+        if self.MAP:
+            J[:]+= -1 + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
+            #J[:]+= -1 # + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
         
         return J

@@ -127,7 +127,7 @@ class ClassGammaMachine():
         for iz in range(self.NSlice):
             APP.runJob("_computeSVD:%i"%(iz),
                        self._computeSVD,
-                       args=(iz,Sig_kpc),serial=True)
+                       args=(iz,Sig_kpc))#,serial=True)
 
         APP.awaitJobResults("_computeSVD:*", progress="Compute SqrtCov")
         self.DicoCovSVD.reload()
@@ -205,7 +205,7 @@ class ClassGammaMachine():
         ssqs=np.sqrt(ss)
         
         ind=np.where(ssqs>0)[0]
-        ind=np.where(ssqs>1e-3*ssqs.max())[0]
+        #ind=np.where(ssqs>1e-3*ssqs.max())[0]
         S0=Us.shape
 
         Us=Us[:,ind]
@@ -254,7 +254,8 @@ class ClassGammaMachine():
 
         import pylab
 
-        figsize=(13,8)
+        fact=1.8
+        figsize=(13/fact,8/fact)
         fig=pylab.figure(FigName,figsize=figsize)
         self.CurrentFig=fig
         self.AxList=[]
@@ -268,6 +269,7 @@ class ClassGammaMachine():
             if np.count_nonzero(np.isnan(S))>0: stop
             pylab.imshow(S,interpolation="nearest")#,vmin=0.5,vmax=2.)
             pylab.title("[%.2f - %.2f]"%(S.min(),S.max()))
+        #pylab.tight_layout()
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)

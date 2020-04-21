@@ -45,6 +45,7 @@ def test(DoPlot=False,ComputeInitCube=False):
     rac_deg,decc_deg=241.20678,55.59485 # cluster
     FOV=0.15
     FOV=0.05
+    FOV=0.05
 #    FOV=0.02
 
     SubField={"rac_deg":rac_deg,
@@ -55,12 +56,13 @@ def test(DoPlot=False,ComputeInitCube=False):
                              DoPlot=DoPlot,
                              ComputeInitCube=ComputeInitCube)
     
-    # g=LMMachine.runLM()
-    # np.save("gEst.npy",g)
+    g=LMMachine.runLM()
+    np.save("gEst.npy",g)
+    return
     g=np.load("gEst.npy")
     #    LMMachine.runMCMC(g)#LMMachine.XSimul.ravel())
     
-    LMMachine.InitDicoChains(LMMachine.XSimul.ravel())
+    LMMachine.InitDicoChains(g)
     LMMachine.runMCMC()
     
 
@@ -92,7 +94,8 @@ class ClassRunLM_Cov():
         self.NPix=int(self.FOV/self.CellDeg)
         if (self.NPix%2)!=0:
             self.NPix+=1
-        self.NPix=5
+            
+        # self.NPix=5
         
         log.print("Choosing NPix=%i"%self.NPix)
 
@@ -129,13 +132,19 @@ class ClassRunLM_Cov():
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
 
+        # ###########################
+        # self.finaliseInit()
+        # ###########################
+
         self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
+
+        self.XSimul=None
         self.simulCat()
+        
         self.CLM.ComputeIndexCube(self.NPix)
         self.MoveType="Stretch"
-        # ###########################
-        self.finaliseInit()
-        # ###########################
+
+        
 
         # self.InitCube(Compute=ComputeInitCube)
         
@@ -197,8 +206,8 @@ class ClassRunLM_Cov():
 
         
         print(":!::")
-        n_z.fill(1./self.CellRad**2)
-        n_z*=30
+        #n_z.fill(1./self.CellRad**2)
+        #n_z*=30
         n_zt=self.CM.Cat_s.n_zt
         
         n_zt=[]
@@ -208,12 +217,14 @@ class ClassRunLM_Cov():
         for iSlice in range(self.NSlice):
             GammaSlice=GM.GammaCube[iSlice]
             ThisNzt=np.zeros((self.NSlice,),np.float32)
-            ThisNzt[iSlice]=1
             ThisX=[]
             ThisY=[]
+            # if iSlice>0: continue
+            ThisNzt[iSlice]=1
             for i in range(self.NPix):
                 for j in range(self.NPix):
                     n=n_z[iSlice]*GammaSlice[i,j]*self.CellRad**2
+                    
                     #print("n=%f"%n)
                     #print(":!::")
                     # N=int(n)
@@ -230,12 +241,12 @@ class ClassRunLM_Cov():
             ThisY=np.float32(np.array(ThisY))
             ThisX+=np.random.rand(ThisX.size)-0.5
             ThisY+=np.random.rand(ThisX.size)-0.5
-            ax=GM.AxList[iSlice].scatter(ThisY,ThisX,s=0.2,c="red")
+            ax=GM.AxList[iSlice].scatter(ThisY,ThisX,s=0.5,c="red")
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
-        # self.GM.PlotGammaCube(Cube=self.NCube,FigName="NCube")
-
+        #self.GM.PlotGammaCube(Cube=self.NCube,FigName="NCube")
+        log.print("Total number of objects in the simulated catalog: %i"%len(X))
 
         # self.XSimul=self.X=self.GM.CubeToVec(self.NCube)
         
@@ -250,15 +261,20 @@ class ClassRunLM_Cov():
         self.CM.Cat_s.yCube[:]=Y[:]
         self.CM.Cat_s.n_zt[:]=n_zt
         
-    def runLM(self):
+    def runLM(self,NMaxSteps=300):
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
-        self.X=self.XSimul
+        if self.XSimul is not None:
+            self.X=self.XSimul
+        else:
+            self.X=np.zeros((self.GM.NParms,),np.float64)
         self.X=np.float64(self.X)
         g=self.X
         #g.fill(0)
 
-        print("True Likelihood = %.5f"%(self.CLM.L(g)))
+        log.print("True Likelihood = %.5f"%(self.CLM.L(g)))
+        # g.fill(0)
+        # log.print("True Likelihood = %.5f"%(self.CLM.L(g)))
         iStep=0
         self.CLM.MassFunction.updateGammaCube(g)
         
@@ -266,6 +282,8 @@ class ClassRunLM_Cov():
 
         GM=self.CLM.MassFunction.GammaMachine
         L_NParms=GM.L_NParms
+        ssqs=np.concatenate(self.GM.L_ssqs)
+        #ssqs/=np.min(ssqs)
             
         iStep=0
         def f(g):
@@ -274,18 +292,19 @@ class ClassRunLM_Cov():
             print(g,L)
             return L
         C=GeneDist.ClassDistMachine()
-        g.fill(0)
-        # g.flat[:]=np.random.randn(g.size)
+        #g.fill(0)
+        #g.flat[:]=np.random.randn(g.size)
         Alpha=1.
-        #self.CLM.measure_dLdg(g)
-        #self.CLM.measure_dJdg(g)
-        #return
+        # self.CLM.measure_dLdg(g)
+        # self.CLM.measure_dJdg(g)
+        # return
         L_L=[]
         L_g=[]
-        
+        StepPlot=10
         while True:
             T.reinit()
-            if iStep%1==0 and self.DoPlot:
+            log.print("======================== Doing step = %i ========================"%iStep)
+            if iStep%StepPlot==0 and self.DoPlot:
                 self.GM.PlotGammaCube(X=g,OutName="g%4.4i.png"%iStep)
                 T.timeit("Plot Gamma Cube")
             # self.CLM.measure_dLdg(g)
@@ -304,16 +323,17 @@ class ClassRunLM_Cov():
                     log.print("  dL=%f"%(L-L_L[-1]))
                     dgest=np.median(np.abs(g-L_g[-1]))
                     log.print("  dg=%f"%(dgest))
-                    if dgest<1e-4:
+                    if iStep>NMaxSteps:
                         return g
+                    #if dgest<1e-4:
+                    #    return g
             L_g.append(g.copy())
             L_L.append(L)
             
             log.print("Likelihood = %.5f"%(L))
-            dldg=self.CLM.dLdg(g).flat[:]
+            dldg=self.CLM.dLdg(g).flat[:]#/ssqs.flat[:]
             T.timeit("Compute J")
-            dJdg=self.CLM.dJdg(g).flat[:]
-            T.timeit("Compute H")
+            
             # epsilon=np.sum(dldg**2)/np.sum(dldg**2*dJdg)
             # Alpha=1000*np.abs(epsilon)
             # print(epsilon)
@@ -321,6 +341,12 @@ class ClassRunLM_Cov():
             dldg=1/(1 + np.exp(-dldg))-0.5
             g.flat[:] += Alpha*dldg
             T.timeit("Step i+1")
+
+            iStep+=1
+            if iStep%StepPlot!=0: continue
+            
+            dJdg=self.CLM.dJdg(g).flat[:]
+            T.timeit("Compute H")
 
             pylab.figure("hist")
             pylab.clf()
@@ -331,35 +357,90 @@ class ClassRunLM_Cov():
                 jPar=iPar+ThisNParms
                 ii+=ThisNParms
                 pylab.subplot(2,2,1)
-                pylab.plot(dldg[iPar:jPar])
+                #pylab.plot(dldg[iPar:jPar])
+                # C=GeneDist.ClassDistMachine()
+                # x,y=C.giveCumulDist(g[iPar:jPar],Ns=100,Norm=True,xmm=[-5,5])
+                # pylab.plot(x,y)
+                pylab.plot(g[iPar:jPar])
+
             pylab.subplot(2,2,2)
             pylab.plot(L_L)
             
-            Sig=np.sqrt(np.abs(dJdg))
             Gamma=self.GM.giveGammaCube(g)
-            e_Gamma=np.abs(Gamma-self.GM.giveGammaCube(g+Sig))
+            Sig=np.sqrt(1./np.abs(dJdg))
+            
+            Sig[Sig>1.]=1
+            # Sig=(1./np.abs(dJdg))
+            NTry=100
+            GammaVar=np.zeros_like(Gamma)
+            GammaStat=np.zeros((NTry,self.NSlice,self.NPix,self.NPix),np.float32)
+            for iTry in range(NTry):
+                GammaStat[iTry]=self.GM.giveGammaCube(g+Sig*np.random.randn(*g.shape))
+            y0Cube=np.quantile(GammaStat,0.16,axis=0)
+            y1Cube=np.quantile(GammaStat,0.84,axis=0)
+            y0=y0Cube.flatten()
+            y1=y1Cube.flatten()
+            ycCube=np.quantile(GammaStat,0.50,axis=0)
+            yc=ycCube.flatten()
+            
+            
+            e_Gamma=GammaStd=(y1-y0)/2.#GammaVar/NTry
+            
+            #e_Gamma=np.abs(Gamma-self.GM.giveGammaCube(g+Sig))
 
             ax=pylab.subplot(2,2,3)
-            y0=Gamma.flatten()-e_Gamma.flatten()
-            y1=Gamma.flatten()+e_Gamma.flatten()
-            x=np.arange(y0.size)
+            #y0=Gamma.flatten()-e_Gamma.flatten()
+            #y1=Gamma.flatten()+e_Gamma.flatten()
+            x=np.arange(Gamma.size)
             ax.fill_between(x,y0,y1, facecolor='gray', alpha=0.5)
             pylab.plot(Gamma.flatten(),color="black")
-            pylab.plot(self.CubeSimul.flatten(),ls="--",color="black")
-
+            pylab.plot(yc.flatten(),color="black",ls=":")
+            if self.XSimul is not None:
+                ys=self.CubeSimul.flatten()
+                pylab.plot(self.CubeSimul.flatten(),ls="--",color="black")
+            else:
+                ys=0
+                
             ax=pylab.subplot(2,2,4)
             y0=Gamma.flatten()-e_Gamma.flatten()
             y1=Gamma.flatten()+e_Gamma.flatten()
-            ys=self.CubeSimul.flatten()
-            x=np.arange(y0.size)
-            ax.fill_between(x,y0-ys,y1-ys, facecolor='gray', alpha=0.5)
-            pylab.plot(Gamma.flatten()-ys,color="black")
+            ym=y=Gamma.flatten()
+            ey=e_Gamma.flatten()
+            #v=((y-ys)/ey) # pylab.hist(,bins=50)
+            # C=GeneDist.ClassDistMachine()
+            # x,y=C.giveCumulDist(v,Ns=100,Norm=True,xmm=[-5,5])
+            # x1,y1=C.giveCumulDist(np.random.randn(1000),Ns=100,Norm=True,xmm=[-5,5])
+            # pylab.plot(x,y,color="black")
+            # pylab.plot(x1,y1,ls=":",color="black")
+
+            v0=y0-ys
+            vc=yc-ys
+            vm=ym-ys
+            v1=y1-ys
+            
+            C=GeneDist.ClassDistMachine()
+            x0,y0=C.giveCumulDist(v0,Ns=100,Norm=True,xmm=[-5,5])
+            x1,y1=C.giveCumulDist(v1,Ns=100,Norm=True,xmm=[-5,5])
+            xc,yc=C.giveCumulDist(vc,Ns=100,Norm=True,xmm=[-5,5])
+            xm,ym=C.giveCumulDist(vm,Ns=100,Norm=True,xmm=[-5,5])
+
+            # pylab.plot(x0,y0,color="black")
+            # pylab.plot(x1,y1,color="black")
+            pylab.fill_between(x0,y0,y1,color="gray")
+            pylab.plot(xc,yc,color="black",ls=":")
+            pylab.plot(xm,ym,color="black")
+            #pylab.plot([0,0],[0,1],color="black",ls=":")
+            pylab.grid()
+            # ax.fill_between(x,y0-ys,y1-ys, facecolor='gray', alpha=0.5)
+            # pylab.plot(Gamma.flatten()-ys,color="black")
             pylab.draw()
             pylab.show(block=False)
             pylab.pause(0.1)
             T.timeit("Plot Sim")
             
-            iStep+=1
+            #self.GM.PlotGammaCube(Cube=y0Cube,FigName="Cube0")
+            #self.GM.PlotGammaCube(Cube=y1Cube,FigName="Cube1")
+            self.GM.PlotGammaCube(Cube=ycCube,FigName="CubeC")
 
         # g0=np.zeros_like(g)
         # g0=np.random.randn(g.size)
@@ -372,14 +453,17 @@ class ClassRunLM_Cov():
     def InitDicoChains(self,XInit):
         self.gStart=XInit.copy()        
         log.print("Initialise Markov Chains...")
-        self.NChain,self.NDim=XInit.size,XInit.size
-        STD=np.max([1e-3,np.std(XInit)])
+        self.NChain,self.NDim=XInit.size//2,XInit.size
+        #self.NChain,self.NDim=10,XInit.size
+        STD=0.1#np.max([1e-3,np.std(XInit)])
+        log.print("Randomize Chains...")
         self.DicoChains["X"]=np.random.randn(self.NChain,self.NDim)*STD+XInit.reshape((1,-1))
-        self.DicoChains["ChainCube"]=np.zeros((self.NChain,self.NSlice,self.NPix,self.NPix),np.float32)
+        # log.print("Set ChainCube...")
+        # self.DicoChains["ChainCube"]=np.zeros((self.NChain,self.NSlice,self.NPix,self.NPix),np.float32)
 
-        #self.DicoChains["X"]=(10**(np.linspace(-1,4,self.NChain))).reshape((self.NChain,self.NDim))*XInit.reshape((1,-1))
 
         
+        log.print("Compute L...")
         self.DicoChains["L"]=np.zeros((self.NChain,),np.float64)
         
         for iChain in range(self.NChain):
@@ -430,7 +514,7 @@ class ClassRunLM_Cov():
             self.DicoChains["X"][iChain]=X2[:]
             self.DicoChains["L"][iChain]=L1
             self.DicoChains["Accepted"][iChain]=1
-            self.DicoChains["ChainCube"][iChain][...]=self.CLM.MassFunction.GammaMachine.GammaCube[...]
+            #self.DicoChains["ChainCube"][iChain][...]=self.CLM.MassFunction.GammaMachine.GammaCube[...]
         else:
             self.DicoChains["Accepted"][iChain]=0
         
@@ -475,12 +559,12 @@ class ClassRunLM_Cov():
         
     def PlotChains2(self,OutName="Test"):
         
-        MeanGammaStack=np.zeros_like(self.GM.GammaCube)
+        MeanGammaStack=np.zeros((self.NSlice,self.NPix,self.NPix),np.float32)
         for iChain in range(self.NChain):
             MeanGammaStack+=self.GM.giveGammaCube(self.DicoChains["X"][iChain])
         MeanGammaStack/=self.NChain
         
-        StdGammaStack=np.zeros_like(self.GM.GammaCube)
+        StdGammaStack=np.zeros((self.NSlice,self.NPix,self.NPix),np.float32)
         for iChain in range(self.NChain):
             StdGammaStack+=(self.GM.giveGammaCube(self.DicoChains["X"][iChain])-MeanGammaStack)**2
         StdGammaStack/=self.NChain
@@ -493,7 +577,11 @@ class ClassRunLM_Cov():
         y0=Gamma.flatten()-e_Gamma.flatten()
         y1=Gamma.flatten()+e_Gamma.flatten()
         x=np.arange(y0.size)
-        ysim=self.CubeSimul.flatten()
+        if not self.XSimul:
+            self.CubeSimul=0
+            ysim=0
+        else:
+            ysim=self.CubeSimul.flatten()
         ystart=CubeStart.flatten()
         ymean=MeanGammaStack.flatten()
         pylab.figure("hist")
@@ -506,7 +594,7 @@ class ClassRunLM_Cov():
         
 
         ax=pylab.subplot(1,2,2)
-        v=((MeanGammaStack-self.CubeSimul)/StdGammaStack).flat[:] # pylab.hist(,bins=50)
+        v=((MeanGammaStack.flat[:]-ysim)/StdGammaStack.flat[:]) # pylab.hist(,bins=50)
         C=GeneDist.ClassDistMachine()
         x,y=C.giveCumulDist(v,Ns=100,Norm=True)
         x1,y1=C.giveCumulDist(np.random.randn(1000),Ns=100,Norm=True)
