@@ -11,6 +11,7 @@ log = logger.getLogger("ClassLikelihoodMachine")
 from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 
 import ClassInitGammaCube
+from ClassAndersonDarling import *
 
 class ClassLikelihoodMachine():
     def __init__(self,CM):
@@ -25,13 +26,17 @@ class ClassLikelihoodMachine():
         self.MassFunction.setSelectionFunction(self.CM)
 
         self.NSlice=self.zParms[-1]-1
+        self.MAP=1
         
+        if self.MAP:
+            self.CAD=ClassAndersonDarlingMachine()
+            
         # APP.registerJobHandlers(self)
 
     def ComputeIndexCube(self,NPix):
         self.NPix=NPix
         self.IndexCube=np.array([i*np.int64(NPix**2)+np.int64(self.CM.Cat_s.xCube*NPix)+np.int64(self.CM.Cat_s.yCube) for i in range(self.NSlice)]).flatten()
-
+        
         X,Y=self.CM.Cat_s.xCube,self.CM.Cat_s.yCube
         
         # # X=np.int64(np.random.rand(X.size)*NPix)
@@ -45,8 +50,10 @@ class ClassLikelihoodMachine():
         #self.IndexCube_Mask=np.array([i*(np.int64(indy).flatten()*NPix+np.int64(indx).flatten()) for i in range(self.NSlice)]).flatten()
         self.IndexCube_Mask_Slice=(np.int64(indy).flatten()*NPix+np.int64(indx).flatten())
         self.IndexCube_Mask=np.array([i*NPix**2+(np.int64(indy).flatten()*NPix+np.int64(indx).flatten()) for i in range(self.NSlice)]).flatten()
-
-
+        if self.MAP:
+            GM=self.MassFunction.GammaMachine
+            self.CAD.generatePA2(GM.NParms,NTry=1000)
+            
     def measure_dLdg(self,g0,DoPlot=0):
         g=g0.copy()
         L0=self.L(g,DoPlot=DoPlot)
@@ -124,12 +131,13 @@ class ClassLikelihoodMachine():
         SumAx_1=np.sum(self.funcNormLog(TypeSum(self.Ax_1)))
         #print(SumNx_0, SumNx_1, SumAx_1)
         L=-SumNx_0 + SumNx_1 + SumAx_1
-        self.MAP=1
         if self.MAP:
-            k=g.size
-            gTg=np.dot(g.T,g).flat[0]+1e-10
-            L+= - (1/2.)*gTg + (k/2-1)*np.log(gTg)
-            #L+= - (1/2.)*gTg
+            L+=self.CAD.logP_x(g.flatten())
+            # k=g.size
+            # gTg=np.dot(g.T,g).flat[0]+1e-10
+            # L+= - (1/2.)*gTg + (k/2-1)*np.log(gTg)
+            # #L+= - (1/2.)*gTg
+            
         #L=  (k/2-1)*np.log(gTg)
         # L=-SumNx_0 + SumAx_1# - (1/2.)*np.dot(g.T,g).flat[0]
         #L=-SumNx_0# - (1/2.)*np.dot(g.T,g).flat[0]
@@ -201,11 +209,14 @@ class ClassLikelihoodMachine():
             ii+=ThisNParms
 
         if self.MAP:
-            k=g0.size
-            gTg=np.sum(g0**2)+1e-10
-            J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
-            #J[:]+= -g0.flat[:]# + 2*(k/2-1)*g0.flat[:]/gTg
-        #J[:]+=  2*(k/2-1)*g0.flat[:]/gTg
+            J[:]+=self.CAD.dlogPdx(g.flatten())
+            
+        # if self.MAP:
+        #     k=g0.size
+        #     gTg=np.sum(g0**2)+1e-10
+        #     J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
+        #     #J[:]+= -g0.flat[:]# + 2*(k/2-1)*g0.flat[:]/gTg
+        # #J[:]+=  2*(k/2-1)*g0.flat[:]/gTg
         return J
 
     # #############################################
@@ -305,7 +316,9 @@ class ClassLikelihoodMachine():
         gTg=np.sum(g0**2)+1e-10
         #J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
         if self.MAP:
-            J[:]+= -1 + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
-            #J[:]+= -1 # + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
+            J[:]+=self.CAD.d2logPdx2(g.flatten())
+        # if self.MAP:
+        #     J[:]+= -1 + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
+        #     #J[:]+= -1 # + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
         
         return J

@@ -35,7 +35,7 @@ def testDist():
 
         Fm=CAD.empirical_FA2
         Pm=CAD.empirical_PA2
-        Pfit=CAD.logP
+        Pfit=CAD.logP_A2
         pylab.subplot(2,2,1)
         pylab.plot(Fm.x,Fm.y,color=Lc[i_n])
         pylab.xlim(0,100)
@@ -75,6 +75,7 @@ def testDist():
 
 
 def checkJacob():
+    np.random.seed(43)
     X0=np.random.randn(20)+0.3#*2+1
     X=X0.copy()
 
@@ -86,6 +87,10 @@ def checkJacob():
     J2b=CAD.dA2_dx(X)
 
     pylab.close("all")
+
+    # ########################################
+    # ##################### A2 ###############
+    fig=pylab.figure("Jacob A2")
     pylab.clf()
     ax=pylab.subplot(2,2,1)
     pylab.scatter(X,J2a)
@@ -107,7 +112,8 @@ def checkJacob():
     Ha=CAD.meas_d2A2_dx2(X)
     print(Ha)
     Hb=CAD.d2A2_dx2(X)
-    fig=pylab.figure("Hessian")
+
+    fig=pylab.figure("Hessian A2")
     pylab.clf()
 
     ax0=pylab.subplot(2,2,1)
@@ -124,13 +130,61 @@ def checkJacob():
     ax2.scatter(X,np.abs(Ha),c="black")
     ax2.scatter(X,np.abs(Hb),c="blue")
     ax2.set_yscale("log")
-    #pylab.scatter(X,J2b1,c="green")
-    # pylab.subplot(2,2,4)
-    # pylab.scatter(X,J2a/J2b)
+    ax3=pylab.subplot(2,2,4,sharex=ax0)
+    ax3.scatter(X,np.abs(Ha)/np.abs(Hb),c="black")
     pylab.draw()
     pylab.show(block=False)
     pylab.pause(0.1)
+
     
+    # ########################################
+    # ##################### logP #############
+    CAD.generatePA2(X.size,NTry=1000)
+    
+    Ha=CAD.meas_dlogP_dx(X)
+    Hb=CAD.dlogPdx(X)
+    
+    fig=pylab.figure("Jacob logP")
+    pylab.clf()
+    ax0=pylab.subplot(2,2,1)
+    ax0.scatter(X,np.abs(Ha))
+    #ax0.set_yscale("log")
+    ax0.set_title("Meas")
+    ax1=pylab.subplot(2,2,2,sharex=ax0,sharey=ax0)
+    ax1.scatter(X,np.abs(Hb))
+    ax1.set_yscale("log")
+    ax1.set_title("Calc")
+    ax2=pylab.subplot(2,2,3,sharex=ax0,sharey=ax0)
+    ax2.scatter(X,np.abs(Ha),c="black")
+    ax2.scatter(X,np.abs(Hb),c="blue")
+    ax2.set_yscale("log")
+    ax3=pylab.subplot(2,2,4,sharex=ax0)
+    ax3.scatter(X,np.abs(Ha)/np.abs(Hb),c="black")
+    pylab.draw()
+    pylab.show(block=False)
+    pylab.pause(0.1)
+
+    Ha=CAD.meas_d2logP_dx2(X)
+    Hb=CAD.d2logPdx2(X)
+    fig=pylab.figure("Hessian logP")
+    pylab.clf()
+    ax0=pylab.subplot(2,2,1)
+    ax0.scatter(X,np.abs(Ha))
+    #ax0.set_yscale("log")
+    ax0.set_title("Meas")
+    ax1=pylab.subplot(2,2,2,sharex=ax0,sharey=ax0)
+    ax1.scatter(X,np.abs(Hb))
+    ax1.set_yscale("log")
+    ax1.set_title("Calc")
+    ax2=pylab.subplot(2,2,3,sharex=ax0,sharey=ax0)
+    ax2.scatter(X,np.abs(Ha),c="black")
+    ax2.scatter(X,np.abs(Hb),c="blue")
+    ax2.set_yscale("log")
+    ax3=pylab.subplot(2,2,4,sharex=ax0)
+    ax3.scatter(X,np.abs(Ha)/np.abs(Hb),c="black")
+    pylab.draw()
+    pylab.show(block=False)
+    pylab.pause(0.1)
 
 
     
@@ -173,7 +227,7 @@ def testMin():
         print("================ %i =============="%iStep)
         C=GeneDist.ClassDistMachine()
         A2=CAD.giveA2(X)
-        logP=CAD.logP(A2)
+        logP=CAD.logP_A2(A2)
         L_A2.append(A2)
         L_logP.append(logP)
         print("A2   = %f"%A2)
@@ -202,20 +256,20 @@ def testMin():
             pylab.subplot(2,2,4)
             #pylab.plot(np.exp(L_logP),color="black")
             pylab.plot(CAD.empirical_PA2.x,CAD.empirical_PA2.y,color="black")
-            pylab.plot(CAD.empirical_PA2.x,np.exp(CAD.logP(CAD.empirical_PA2.x)),color="black",ls="--")
-            pylab.scatter([A2],[np.exp(CAD.logP(A2))])
+            pylab.plot(CAD.empirical_PA2.x,np.exp(CAD.logP_A2(CAD.empirical_PA2.x)),color="black",ls="--")
+            pylab.scatter([A2],[np.exp(CAD.logP_A2(A2))])
             pylab.draw()
             pylab.show(block=False)
             pylab.pause(0.01)
 
         
         X1=X-Alpha*J
-        if CAD.logP(CAD.giveA2(X1))<CAD.logP(CAD.giveA2(X)):
+        if CAD.logP_A2(CAD.giveA2(X1))<CAD.logP_A2(CAD.giveA2(X)):
 #        if CAD.giveA2(X1)>CAD.giveA2(X):
             Alpha/=1.5
         else:
             X=X1
-            print(CAD.logP(CAD.giveA2(X)))
+            print(CAD.logP_A2(CAD.giveA2(X)))
 
             
         if iStep%10==0:

@@ -95,13 +95,6 @@ class ClassAndersonDarlingMachine():
         # dx=0.01
         # self.dlogPdA2=self.logP.diff()
 
-    def dlogPdA2(self,A2):
-        if self.logP is None:
-            log.print("Need a logP function")
-            stop
-        dx=0.01
-        return (self.logP(A2+dx)-self.logP(A2))/dx#
-            
     def generatePA2(self,n,NTry=100000):
         L_y=[]
         log.print("Number of generated %i-size samples: %i"%(n,NTry))
@@ -121,12 +114,40 @@ class ClassAndersonDarlingMachine():
         log.print("Fit cumulative distribution...")
         self.pars_fit_logPA2,Chi2a,Chi2b=Fit_logPA2(self.empirical_PA2.x,np.log(self.empirical_PA2.y),GaussPars=(med,sig),func=func)
         log.print("  reduced Chi-square of fit = ( %f -> %f )"%(Chi2a,Chi2b))
-        self.logP=lambda x: func(x,self.pars_fit_logPA2)
+        self.logP_A2=lambda x: func(x,self.pars_fit_logPA2)
 
+    def logP_x(self,X):
+        return self.logP_A2(self.giveA2(X))
+    
     def dlogPdx(self,x):
         dA2dx=self.dA2_dx(x)
         A2=self.giveA2(x)
         return self.dlogPdA2(A2)*dA2dx
+
+    def dlogPdA2(self,A2):
+        if self.logP_A2 is None:
+            log.print("Need a logP function")
+            stop
+        dx=0.001
+        return (self.logP_A2(A2+dx)-self.logP_A2(A2-dx))/(2*dx)#
+
+    def d2logPdA2(self,A2):
+        if self.logP_A2 is None:
+            log.print("Need a logP function")
+            stop
+        dx=0.001
+        return (self.dlogPdA2(A2+dx)-self.dlogPdA2(A2-dx))/(2*dx)#
+            
+    def d2logPdx2(self,X):
+        A2=self.giveA2(X)
+        A=self.d2logPdA2(A2)
+        B=self.dA2_dx(X)
+        C=self.dlogPdA2(A2)
+        D=self.d2A2_dx2(X)
+        return A*B**2+C*D
+    
+    
+
     
     def giveA2(self,X):
         n=X.size
@@ -207,5 +228,35 @@ class ClassAndersonDarlingMachine():
             LH.append(H)
         
         return np.array(LH)
+    
+
+    def meas_dlogP_dx(self,X):
+        LH=[]
+        for iParm in range(X.size):
+            dx=np.linspace(-.001,.001,2)
+            LJ=[]
+            for ix in range(dx.size):
+                Xix=X.copy()
+                Xix[iParm]+=dx[ix]
+                LJ.append(self.logP_x(Xix))
+            H=(LJ[1]-LJ[0])/(dx[1]-dx[0])
+            LH.append(H)
+
+        return np.array(LH)
+
+    def meas_d2logP_dx2(self,X):
+        LH=[]
+        for iParm in range(X.size):
+            dx=np.linspace(-.01,.01,2)
+            LJ=[]
+            for ix in range(dx.size):
+                Xix=X.copy()
+                Xix[iParm]+=dx[ix]
+                LJ.append(self.dlogPdx(Xix)[iParm])
+            H=(LJ[1]-LJ[0])/(dx[1]-dx[0])
+            LH.append(H)
+        
+        return np.array(LH)
+    
     
 
