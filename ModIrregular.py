@@ -185,8 +185,8 @@ def giveIrregularCumulDist(X0,xmm=None,Type="Discrete"):
         
         xx=np.zeros((NMin*2,),np.float32)
         xx[0]=x0
-        xx[1:-1][0::2]=X[:]
-        xx[1:-1][1::2]=X[:]+1e-6
+        xx[1:-1][0::2]=X[:]-1e-7
+        xx[1:-1][1::2]=X[:]+1e-7
         xx[-1]=x1
         yy=np.zeros_like(xx)
         yy[0]=0

@@ -78,6 +78,7 @@ class ClassAndersonDarlingMachine():
         r.y[ind]=1e-10
         #r.y=np.sqrt(r.y)
         #r.y[:]=1.
+
         r.update()
 
         #g=np.exp(-x**2/2.)
@@ -87,6 +88,7 @@ class ClassAndersonDarlingMachine():
         self.f_Phi=f_Phi
         self.r=r
         self.w=r.inv()
+        self.dwdx=self.w.diff()
         self.logP=None
         # A2=np.linspace(0,5,10000)
         # self.logP=ClassF(A2,logTwoSlopes(A2,CoefsTwoSlope))
@@ -133,6 +135,7 @@ class ClassAndersonDarlingMachine():
         #sw=np.sum(self.w(X))
         #A2=(n/sw)*n*((F_X-f_Phi)**2 * self.w).int()
         A2=n*((F_X-f_Phi)**2 * self.w).int()
+        #A2=n*((F_X-f_Phi)**2).int()
         return A2
 
     # #########################
@@ -149,7 +152,8 @@ class ClassAndersonDarlingMachine():
         dDirac=0.001
         Diff=(Fn_k-F_k)
         
-        dA2_dxi= 2*nk* (-1/nk) *self.w(xi)* (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
+        dA2_dxi= -2 *self.w(xi)* (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
+        #dA2_dxi= -2* (Diff(xi+1e-5)+Diff(xi-1e-5))/2.
 
         return dA2_dxi
 
@@ -183,7 +187,10 @@ class ClassAndersonDarlingMachine():
         dDirac=0.001
         Diff=(Fn_k-F_k)
         
-        dA2_dxi= 2*nk* (-1/nk) *self.w(xi)#* (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
+        dA2_dxi= -2 *self.dwdx(xi)#* (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
+        dA2_dxi= -2*(-self.dwdx(xi)*(Diff(xi+1e-3)+Diff(xi-1e-3))/2.+self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+        #dA2_dxi= -2*(self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+        #dA2_dxi= -2*(self.dwdx(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
 
         return dA2_dxi
     

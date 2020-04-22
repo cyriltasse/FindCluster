@@ -75,7 +75,7 @@ def testDist():
 
 
 def checkJacob():
-    X0=np.random.randn(10)#*2+1
+    X0=np.random.randn(20)+0.3#*2+1
     X=X0.copy()
 
     CAD=ClassAndersonDarlingMachine()
@@ -84,9 +84,10 @@ def checkJacob():
     J2a=CAD.meas_dA2_dx(X)
     #J2b,J2b1=CAD.give_dA2_dx(X)
     J2b=CAD.dA2_dx(X)
-    
+
+    pylab.close("all")
     pylab.clf()
-    pylab.subplot(2,2,1)
+    ax=pylab.subplot(2,2,1)
     pylab.scatter(X,J2a)
     pylab.title("Meas")
     pylab.subplot(2,2,2)
@@ -114,12 +115,12 @@ def checkJacob():
     ax0.set_yscale("log")
     ax0.set_title("Meas")
 
-    ax1=pylab.subplot(2,2,2)
+    ax1=pylab.subplot(2,2,2,sharex=ax0,sharey=ax0)
     ax1.scatter(X,np.abs(Hb))
     ax1.set_yscale("log")
     ax1.set_title("Calc")
 
-    ax2=pylab.subplot(2,2,3)
+    ax2=pylab.subplot(2,2,3,sharex=ax0,sharey=ax0)
     ax2.scatter(X,np.abs(Ha),c="black")
     ax2.scatter(X,np.abs(Hb),c="blue")
     ax2.set_yscale("log")
@@ -179,7 +180,7 @@ def testMin():
         print("logP = %f"%logP)
 
         #J=CAD.give_dA2_dx(X)[1]
-        J=CAD.give_dA2_dx(X)
+        #J=CAD.dA2_dx(X)
         J=-CAD.dlogPdx(X)
 
         if iStep%10==0:
@@ -210,10 +211,12 @@ def testMin():
         
         X1=X-Alpha*J
         if CAD.logP(CAD.giveA2(X1))<CAD.logP(CAD.giveA2(X)):
+#        if CAD.giveA2(X1)>CAD.giveA2(X):
             Alpha/=1.5
         else:
             X=X1
             print(CAD.logP(CAD.giveA2(X)))
+
             
         if iStep%10==0:
             Alpha*=1.5
