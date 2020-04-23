@@ -42,9 +42,6 @@ def logTwoSlopes(x,pars):
     S=Sigmoid(x-s0,a=s1)
     return y0*(1-S)+y1*S
 
-def Gaussian1D(x):
-    return 1./np.sqrt(2*np.pi)*np.exp(-x**2/2.)
-
     
 def Fit_logPA2(x,y,GaussPars=(0,1),func=None):
 
@@ -73,10 +70,9 @@ def Fit_logPA2(x,y,GaussPars=(0,1),func=None):
 
 class ClassAndersonDarlingMachine():
     def __init__(self,Scale="linear"):
-        x=np.linspace(-7,7,1001)
+        x=np.linspace(-5,5,1001)
         f_Phi=ClassF(x,Phi(x))
         f_Phi1=ClassF(x,1-Phi(x))
-        self.f_Gauss1D=ClassF(x,Gaussian1D(x))
         r=f_Phi*f_Phi1
         ind=np.where(r.y<1e-10)
         r.y[ind]=1e-10
@@ -93,7 +89,6 @@ class ClassAndersonDarlingMachine():
         self.f_Phi=f_Phi
         self.r=r
         self.w=r.inv()
-        self.w=(self.w*self.f_Gauss1D)
         self.dwdx=self.w.diff()
         self.logP=None
         # A2=np.linspace(0,5,10000)
@@ -110,7 +105,7 @@ class ClassAndersonDarlingMachine():
         log.print("Compute cumulative distribution...")
         P=self.empirical_FA2=giveIrregularCumulDist(np.array(L_y),Type="Continuous")
         PT=P.T()
-        x=np.linspace(PT(0.001),PT(0.95),200)
+        x=np.linspace(PT(0.001),PT(0.95),100)
         P1=ClassF(x,P(x))
         
         self.empirical_PA2=P1.diff()
@@ -127,7 +122,7 @@ class ClassAndersonDarlingMachine():
         Pm=self.empirical_PA2
         Pfit=self.logP_A2
         
-        fig=pylab.figure("logP-A2")
+        pylab.figure("logP-A2")
         pylab.subplot(2,2,1)
         pylab.plot(Fm.x,Fm.y)
         pylab.xlim(0,100)
@@ -138,17 +133,6 @@ class ClassAndersonDarlingMachine():
         pylab.show(block=False)
         pylab.pause(0.1)
 
-    # #########################
-    def giveA2(self,X):
-        n=X.size
-        f_Phi=self.f_Phi
-        F_X=giveIrregularCumulDist(X)
-        #sw=np.sum(self.w(X))
-        #A2=(n/sw)*n*((F_X-f_Phi)**2 * self.w).int()
-        #A2=n*((F_X-f_Phi)**2 * self.w * self.f_Gauss1D).int()
-        A2=n*((F_X-f_Phi)**2 * self.w).int()
-        #A2=n*((F_X-f_Phi)**2).int()
-        return A2
 
         
     def logP_x(self,X):
@@ -187,6 +171,15 @@ class ClassAndersonDarlingMachine():
     
 
     
+    def giveA2(self,X):
+        n=X.size
+        f_Phi=self.f_Phi
+        F_X=giveIrregularCumulDist(X)
+        #sw=np.sum(self.w(X))
+        #A2=(n/sw)*n*((F_X-f_Phi)**2 * self.w).int()
+        A2=n*((F_X-f_Phi)**2 * self.w).int()
+        #A2=n*((F_X-f_Phi)**2).int()
+        return A2
 
     # #########################
     # Jacob
@@ -202,8 +195,7 @@ class ClassAndersonDarlingMachine():
         dDirac=0.001
         Diff=(Fn_k-F_k)
         
-        #dA2_dxi= -2 *self.w(xi)* self.f_Gauss1D(xi) * (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
-        dA2_dxi= -2 *self.w(xi) * (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
+        dA2_dxi= -2 *self.w(xi)* (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
         #dA2_dxi= -2* (Diff(xi+1e-5)+Diff(xi-1e-5))/2.
 
         return dA2_dxi

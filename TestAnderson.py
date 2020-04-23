@@ -17,13 +17,22 @@
 
 from ClassAndersonDarling import *
 
+# # ##############################
+# # Catch numpy warning
+# np.seterr(all='raise')
+# import warnings
+# warnings.filterwarnings('error')
+# #with warnings.catch_warnings():
+# #    warnings.filterwarnings('error')
+# # ##############################
+
 
 
 def testDist():
+    pylab.close("all")
     np.random.seed(43)
-    pylab.clf()
     Ln=np.int64(10**(np.linspace(1,4,5)))
-    #Ln=np.int64(10**(np.linspace(1,3,2)))
+    Ln=np.int64(10**(np.linspace(1,3,2)))
     #Ln=[10,100]
     cmap=pylab.cm.jet
     Lc=cmap(np.linspace(0.1,0.9,len(Ln)))[::-1]
@@ -31,50 +40,12 @@ def testDist():
     for i_n,n in enumerate(Ln):
         print("doing n=%i"%n)
         CAD=ClassAndersonDarlingMachine()
-        CAD.generatePA2(n,NTry=10000)
-
-        Fm=CAD.empirical_FA2
-        Pm=CAD.empirical_PA2
-        Pfit=CAD.logP_A2
-        pylab.subplot(2,2,1)
-        pylab.plot(Fm.x,Fm.y,color=Lc[i_n])
-        pylab.xlim(0,100)
-        #pylab.ylim(-7,1)
-        pylab.subplot(2,2,2)
-        #pylab.yscale("log")
-        pylab.scatter(Pm.x,np.log(Pm.y),color=Lc[i_n])#,edgecolors="black")
-        pylab.plot(Pm.x,Pfit(Pm.x),color=Lc[i_n],alpha=0.5)
-        #pylab.plot(p.x,yFit0,color=Lc[i_n],ls="--",alpha=0.5)
-        #pylab.ylim(-10,0)
-        # pylab.subplot(2,2,3)
-        # AA=np.linspace(0,20*n,10000)
-        # pylab.plot(AA,logChi2(AA,k=n))
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
-    y=np.log(p.y)
-    np.savez("P.npz",x=x,y=y)
-    return
-    S=np.load("P.npz")
-    xA2=S["x"][4::]
-    PA2=S["y"][4::]
+        CAD.generatePA2(n,NTry=3000)
 
 
 
-
-    pylab.clf()
-    pylab.scatter(xA2,PA2)
     
-    pylab.plot(xA2,func(xA2,pars))
-#    pylab.plot(xA2,logTwoSlopes(xA2,pars2))
-    pylab.draw()
-    pylab.show(block=False)
-    pylab.pause(0.1)
-
-    print(pars)
-
-
-def checkJacob():
+def testJacob():
     np.random.seed(43)
     X0=np.random.randn(20)+0.3#*2+1
     X=X0.copy()
@@ -107,7 +78,7 @@ def checkJacob():
     pylab.draw()
     pylab.show(block=False)
     pylab.pause(0.1)
-
+    return
 
     Ha=CAD.meas_d2A2_dx2(X)
     print(Ha)

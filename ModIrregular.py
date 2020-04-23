@@ -61,7 +61,7 @@ class ClassF():
         return self.f(x)
         
     def give_y0y1(self,f1):
-        x=np.sort(np.concatenate([self.x,f1.x]))
+        x=np.sort(np.unique(np.concatenate([self.x,f1.x])))
         y0=self.f(x)
         y1=f1(x)
         return x,y0,y1
