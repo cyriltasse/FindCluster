@@ -28,8 +28,6 @@ class ClassLikelihoodMachine():
         self.NSlice=self.zParms[-1]-1
         self.MAP=1
         
-        if self.MAP:
-            self.CAD=ClassAndersonDarlingMachine()
             
         # APP.registerJobHandlers(self)
 
@@ -52,8 +50,12 @@ class ClassLikelihoodMachine():
         self.IndexCube_Mask=np.array([i*NPix**2+(np.int64(indy).flatten()*NPix+np.int64(indx).flatten()) for i in range(self.NSlice)]).flatten()
         if self.MAP:
             GM=self.MassFunction.GammaMachine
-            self.CAD.generatePA2(GM.NParms,NTry=1000)
-            
+            self.LCAD=[]
+            for iSlice in range(self.NSlice):
+                CAD=ClassAndersonDarlingMachine()
+                CAD.generatePA2(GM.L_NParms[iSlice],NTry=2000)
+                self.LCAD.append(CAD)
+                
     def measure_dLdg(self,g0,DoPlot=0):
         g=g0.copy()
         L0=self.L(g,DoPlot=DoPlot)
@@ -132,7 +134,8 @@ class ClassLikelihoodMachine():
         #print(SumNx_0, SumNx_1, SumAx_1)
         L=-SumNx_0 + SumNx_1 + SumAx_1
         if self.MAP:
-            L+=self.CAD.logP_x(g.flatten())
+            for CAD in self.LCAD:
+                L+=CAD.logP_x(g.flatten())
             # k=g.size
             # gTg=np.dot(g.T,g).flat[0]+1e-10
             # L+= - (1/2.)*gTg + (k/2-1)*np.log(gTg)
@@ -206,10 +209,10 @@ class ClassLikelihoodMachine():
             #J[iPar:jPar]=  + Sum_dAx_dg
             #J[iPar:jPar]= -Sum_dNx_0_dg
             #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
-            ii+=ThisNParms
 
-        if self.MAP:
-            J[:]+=self.CAD.dlogPdx(g.flatten())
+            if self.MAP:
+                J[iPar:jPar]+=self.LCAD[iSlice].dlogPdx(g[iPar:jPar].flatten())
+            ii+=ThisNParms
             
         # if self.MAP:
         #     k=g0.size
@@ -310,15 +313,17 @@ class ClassLikelihoodMachine():
             J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg#g0.flat[iPar:jPar]
             #J[iPar:jPar]= 0
             #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
+            
+            if self.MAP:
+                J[iPar:jPar]+=np.abs(self.LCAD[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
             ii+=ThisNParms
             
-        k=g0.size
-        gTg=np.sum(g0**2)+1e-10
-        #J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
-        if self.MAP:
-            J[:]+=self.CAD.d2logPdx2(g.flatten())
-        # if self.MAP:
-        #     J[:]+= -1 + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
-        #     #J[:]+= -1 # + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
+        # k=g0.size
+        # gTg=np.sum(g0**2)+1e-10
+        # #J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
+        #     #J[:]+=self.CAD.d2logPdx2(g.flatten())
+        # # if self.MAP:
+        # #     J[:]+= -1 + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
+        # #     #J[:]+= -1 # + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
         
         return J

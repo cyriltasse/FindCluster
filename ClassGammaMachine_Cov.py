@@ -205,7 +205,7 @@ class ClassGammaMachine():
         ssqs=np.sqrt(ss)
         
         ind=np.where(ssqs>0)[0]
-        #ind=np.where(ssqs>1e-3*ssqs.max())[0]
+        ind=np.where(ssqs>1e-2*ssqs.max())[0]
         S0=Us.shape
 
         Us=Us[:,ind]

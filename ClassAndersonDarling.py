@@ -76,6 +76,7 @@ class ClassAndersonDarlingMachine():
         r=f_Phi*f_Phi1
         ind=np.where(r.y<1e-10)
         r.y[ind]=1e-10
+        #r.y=r.y**1.2
         #r.y=np.sqrt(r.y)
         #r.y[:]=1.
 
@@ -95,7 +96,7 @@ class ClassAndersonDarlingMachine():
         # dx=0.01
         # self.dlogPdA2=self.logP.diff()
 
-    def generatePA2(self,n,NTry=100000):
+    def generatePA2(self,n,NTry=10000):
         L_y=[]
         log.print("Number of generated %i-size samples: %i"%(n,NTry))
         for iTry in range(NTry):
@@ -116,10 +117,31 @@ class ClassAndersonDarlingMachine():
         log.print("  reduced Chi-square of fit = ( %f -> %f )"%(Chi2a,Chi2b))
         self.logP_A2=lambda x: func(x,self.pars_fit_logPA2)
 
+        
+        Fm=self.empirical_FA2
+        Pm=self.empirical_PA2
+        Pfit=self.logP_A2
+        
+        pylab.figure("logP-A2")
+        pylab.subplot(2,2,1)
+        pylab.plot(Fm.x,Fm.y)
+        pylab.xlim(0,100)
+        pylab.subplot(2,2,2)
+        pylab.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
+        pylab.plot(Pm.x,Pfit(Pm.x))
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.1)
+
+
+        
     def logP_x(self,X):
+        if self.logP_A2 is None:
+            self.generatePA2(X.size)
         return self.logP_A2(self.giveA2(X))
     
     def dlogPdx(self,x):
+        
         dA2dx=self.dA2_dx(x)
         A2=self.giveA2(x)
         return self.dlogPdA2(A2)*dA2dx

@@ -124,7 +124,7 @@ class ClassRunLM_Cov():
         self.GM=self.CLM.MassFunction.GammaMachine
 
         # CLM.showRGB()
-        self.CLM.ComputeIndexCube(self.NPix)
+        #self.CLM.ComputeIndexCube(self.NPix)
         pylab.close("all")
 
 
@@ -132,9 +132,9 @@ class ClassRunLM_Cov():
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
 
-        # ###########################
-        # self.finaliseInit()
-        # ###########################
+        ###########################
+        self.finaliseInit()
+        ###########################
 
         self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
 
@@ -143,7 +143,7 @@ class ClassRunLM_Cov():
         
         self.CLM.ComputeIndexCube(self.NPix)
         self.MoveType="Stretch"
-
+        
         
 
         # self.InitCube(Compute=ComputeInitCube)
@@ -293,7 +293,7 @@ class ClassRunLM_Cov():
             return L
         C=GeneDist.ClassDistMachine()
         #g.fill(0)
-        #g.flat[:]=np.random.randn(g.size)
+        g.flat[:]=np.random.randn(g.size)*0.1
         Alpha=1.
         # self.CLM.measure_dLdg(g)
         # self.CLM.measure_dJdg(g)
@@ -348,7 +348,7 @@ class ClassRunLM_Cov():
             dJdg=self.CLM.dJdg(g).flat[:]
             T.timeit("Compute H")
 
-            pylab.figure("hist")
+            figH=pylab.figure("hist")
             pylab.clf()
             ii=0
             for iSlice in range(self.CLM.NSlice):
@@ -358,10 +358,10 @@ class ClassRunLM_Cov():
                 ii+=ThisNParms
                 pylab.subplot(2,2,1)
                 #pylab.plot(dldg[iPar:jPar])
-                # C=GeneDist.ClassDistMachine()
-                # x,y=C.giveCumulDist(g[iPar:jPar],Ns=100,Norm=True,xmm=[-5,5])
-                # pylab.plot(x,y)
-                pylab.plot(g[iPar:jPar])
+                C=GeneDist.ClassDistMachine()
+                x,y=C.giveCumulDist(g[iPar:jPar],Ns=100,Norm=True)#,xmm=[-5,5])
+                pylab.plot(x,y)
+                #pylab.plot(g[iPar:jPar])
 
             pylab.subplot(2,2,2)
             pylab.plot(L_L)
@@ -437,7 +437,7 @@ class ClassRunLM_Cov():
             pylab.show(block=False)
             pylab.pause(0.1)
             T.timeit("Plot Sim")
-            
+            figH.savefig("Hist%5.5i.png"%iStep)
             #self.GM.PlotGammaCube(Cube=y0Cube,FigName="Cube0")
             #self.GM.PlotGammaCube(Cube=y1Cube,FigName="Cube1")
             self.GM.PlotGammaCube(Cube=ycCube,FigName="CubeC")
