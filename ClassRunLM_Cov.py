@@ -313,6 +313,7 @@ class ClassRunLM_Cov():
             L=self.CLM.L(g)
             T.timeit("Compute L")
             if iStep>0:
+                dL=L-L_L[-1]
                 if L<L_L[-1]:
                     fact=1.5
                     log.print("decreasing Alpha: %f -> %f"%(Alpha,Alpha/fact))
@@ -320,10 +321,10 @@ class ClassRunLM_Cov():
                     g=L_g[-1]
                     continue
                 elif L!=L_L[-1]:
-                    log.print("  dL=%f"%(L-L_L[-1]))
+                    log.print("  dL=%f"%(dL))
                     dgest=np.median(np.abs(g-L_g[-1]))
                     log.print("  dg=%f"%(dgest))
-                    if iStep>NMaxSteps:
+                    if iStep>NMaxSteps or np.abs(dL)<0.01:
                         return g
                     #if dgest<1e-4:
                     #    return g
@@ -440,7 +441,9 @@ class ClassRunLM_Cov():
             figH.savefig("Hist%5.5i.png"%iStep)
             #self.GM.PlotGammaCube(Cube=y0Cube,FigName="Cube0")
             #self.GM.PlotGammaCube(Cube=y1Cube,FigName="Cube1")
-            self.GM.PlotGammaCube(Cube=ycCube,FigName="CubeC")
+            #self.GM.PlotGammaCube(Cube=ycCube,FigName="CubeC")
+            eCube=ycCube/((y1Cube-y0Cube)/2.)
+            self.GM.PlotGammaCube(Cube=eCube,FigName="eCube")
 
         # g0=np.zeros_like(g)
         # g0=np.random.randn(g.size)

@@ -93,7 +93,7 @@ class ClassAndersonDarlingMachine():
         self.f_Phi=f_Phi
         self.r=r
         self.w=r.inv()
-        self.w=(self.w*self.f_Gauss1D)
+        #self.w=(self.w*self.f_Gauss1D)
         self.dwdx=self.w.diff()
         self.logP=None
         # A2=np.linspace(0,5,10000)
@@ -128,10 +128,10 @@ class ClassAndersonDarlingMachine():
         Pfit=self.logP_A2
         
         fig=pylab.figure("logP-A2")
-        pylab.subplot(2,2,1)
-        pylab.plot(Fm.x,Fm.y)
-        pylab.xlim(0,100)
-        pylab.subplot(2,2,2)
+        # pylab.subplot(2,2,1)
+        # pylab.plot(Fm.x,Fm.y)
+        # pylab.xlim(0,100)
+        # pylab.subplot(2,2,2)
         pylab.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
         pylab.plot(Pm.x,Pfit(Pm.x))
         pylab.draw()
