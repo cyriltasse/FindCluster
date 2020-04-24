@@ -35,35 +35,36 @@ def testDist():
     #Ln=np.int64(10**(np.linspace(1,3,2)))
     Ln=[7]
     Ln=[17]
+    Ln=[200]
     cmap=pylab.cm.jet
     Lc=cmap(np.linspace(0.1,0.9,len(Ln)))[::-1]
     for i_n,n in enumerate(Ln):
         print("doing n=%i"%n)
         CAD=ClassShapiroWilk()
         # CAD.generateOrderStats(n)
-        CAD.generatePW(n,NTry=30000)
-        CAD.generatePW(n,NTry=30000,UseScipy=True)
+        CAD.generatePW(n,NTry=1000)
+        #CAD.generatePW(n,NTry=30000,UseScipy=True)
 
 
 
     
 def testJacob():
+    pylab.close("all")
     np.random.seed(43)
-    X0=np.random.randn(20)+0.3#*2+1
+    X0=np.random.randn(300)#*2+1
     X=X0.copy()
 
     CAD=ClassShapiroWilk()
+    CAD.generatePW(X.size)
+    
+    J2a=CAD.meas_dW_dx(X)
+    #J2b,J2b1=CAD.give_dW_dx(X)
+    J2b=CAD.dW_dx(X)
 
-    fig=pylab.figure("Jacob")
-    J2a=CAD.meas_dA2_dx(X)
-    #J2b,J2b1=CAD.give_dA2_dx(X)
-    J2b=CAD.dA2_dx(X)
-
-    pylab.close("all")
 
     # ########################################
-    # ##################### A2 ###############
-    fig=pylab.figure("Jacob A2")
+    # ##################### W ###############
+    fig=pylab.figure("Jacob W")
     pylab.clf()
     ax=pylab.subplot(2,2,1)
     pylab.scatter(X,J2a)
@@ -80,39 +81,38 @@ def testJacob():
     pylab.draw()
     pylab.show(block=False)
     pylab.pause(0.1)
-    return
 
-    Ha=CAD.meas_d2A2_dx2(X)
+    Ha=CAD.meas_d2W_dx2(X)
     print(Ha)
-    Hb=CAD.d2A2_dx2(X)
+    Hb=CAD.d2W_dx2(X)
 
-    fig=pylab.figure("Hessian A2")
+    fig=pylab.figure("Hessian W")
     pylab.clf()
 
     ax0=pylab.subplot(2,2,1)
     ax0.scatter(X,np.abs(Ha))
-    ax0.set_yscale("log")
+    #ax0.set_yscale("log")
     ax0.set_title("Meas")
 
     ax1=pylab.subplot(2,2,2,sharex=ax0,sharey=ax0)
     ax1.scatter(X,np.abs(Hb))
-    ax1.set_yscale("log")
+    #ax1.set_yscale("log")
     ax1.set_title("Calc")
 
     ax2=pylab.subplot(2,2,3,sharex=ax0,sharey=ax0)
     ax2.scatter(X,np.abs(Ha),c="black")
     ax2.scatter(X,np.abs(Hb),c="blue")
-    ax2.set_yscale("log")
+    #ax2.set_yscale("log")
     ax3=pylab.subplot(2,2,4,sharex=ax0)
     ax3.scatter(X,np.abs(Ha)/np.abs(Hb),c="black")
     pylab.draw()
     pylab.show(block=False)
     pylab.pause(0.1)
-
+    return
     
     # ########################################
     # ##################### logP #############
-    CAD.generatePA2(X.size,NTry=1000)
+    CAD.generatePW(X.size,NTry=1000)
     
     Ha=CAD.meas_dlogP_dx(X)
     Hb=CAD.dlogPdx(X)
@@ -180,7 +180,7 @@ def testMin():
     # ax=pylab.subplot(1,2,1)
     # pylab.plot(CAD.logP.x,CAD.logP.y)
     # pylab.subplot(1,2,2,sharex=ax)
-    # pylab.plot(CAD.dlogPdA2.x,CAD.dlogPdA2.y)
+    # pylab.plot(CAD.dlogPdW.x,CAD.dlogPdW.y)
     # pylab.draw()
     # pylab.show(block=False)
     # pylab.pause(0.1)
@@ -188,26 +188,26 @@ def testMin():
 
     Alpha=np.float64(np.array([1]))
     L_A=[]
-    L_A2=[]
+    L_W=[]
     L_logP=[]
     iStep=0
     pylab.clf()
     
-    CAD.generatePA2(X.size,NTry=10000)
+    CAD.generatePW(X.size,NTry=10000)
     
     while True:
 
         print("================ %i =============="%iStep)
         C=GeneDist.ClassDistMachine()
-        A2=CAD.giveA2(X)
-        logP=CAD.logP_A2(A2)
-        L_A2.append(A2)
+        W=CAD.giveW(X)
+        logP=CAD.logP_W(W)
+        L_W.append(W)
         L_logP.append(logP)
-        print("A2   = %f"%A2)
+        print("W   = %f"%W)
         print("logP = %f"%logP)
 
-        #J=CAD.give_dA2_dx(X)[1]
-        #J=CAD.dA2_dx(X)
+        #J=CAD.give_dW_dx(X)[1]
+        #J=CAD.dW_dx(X)
         J=-CAD.dlogPdx(X)
 
         if iStep%10==0:
@@ -219,30 +219,30 @@ def testMin():
             pylab.plot(x,y,color="black")
             pylab.plot(x,Phi(x),color="black",ls=":")
             pylab.plot(x0,y0,color="black",ls="--")
-            if len(L_A2)>2:
+            if len(L_W)>2:
                 ax=pylab.subplot(2,2,2)
-                #pylab.plot(np.log(L_A2),color="black")
-                pylab.plot(L_A2,color="black")
+                #pylab.plot(np.log(L_W),color="black")
+                pylab.plot(L_W,color="black")
                 ax.set_yscale("log")
             pylab.subplot(2,2,3)
             pylab.plot(xJ,yJ,color="black")
             pylab.subplot(2,2,4)
             #pylab.plot(np.exp(L_logP),color="black")
-            pylab.plot(CAD.empirical_PA2.x,CAD.empirical_PA2.y,color="black")
-            pylab.plot(CAD.empirical_PA2.x,np.exp(CAD.logP_A2(CAD.empirical_PA2.x)),color="black",ls="--")
-            pylab.scatter([A2],[np.exp(CAD.logP_A2(A2))])
+            pylab.plot(CAD.empirical_PW.x,CAD.empirical_PW.y,color="black")
+            pylab.plot(CAD.empirical_PW.x,np.exp(CAD.logP_W(CAD.empirical_PW.x)),color="black",ls="--")
+            pylab.scatter([W],[np.exp(CAD.logP_W(W))])
             pylab.draw()
             pylab.show(block=False)
             pylab.pause(0.01)
 
         
         X1=X-Alpha*J
-        if CAD.logP_A2(CAD.giveA2(X1))<CAD.logP_A2(CAD.giveA2(X)):
-#        if CAD.giveA2(X1)>CAD.giveA2(X):
+        if CAD.logP_W(CAD.giveW(X1))<CAD.logP_W(CAD.giveW(X)):
+#        if CAD.giveW(X1)>CAD.giveW(X):
             Alpha/=1.5
         else:
             X=X1
-            print(CAD.logP_A2(CAD.giveA2(X)))
+            print(CAD.logP_W(CAD.giveW(X)))
 
             
         if iStep%10==0:

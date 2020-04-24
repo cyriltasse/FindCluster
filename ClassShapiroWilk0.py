@@ -11,7 +11,9 @@ from killMS.Array import ModLinAlg
 erf=scipy.special.erf
 G=scipy.special.gamma
 logG=scipy.special.loggamma
-Phi=lambda x: 0.5*(1+erf(x/np.sqrt(2)))
+#Phi=lambda x: 0.5*(1+erf(x/np.sqrt(2)))
+def Phi(x,mu=0.,sig=1.):
+    return 0.5*(1+erf((x-mu)/(sig*np.sqrt(2))))
 def Sigmoid(x,a=1):
     return 1./(1+np.exp(-x/a))
 mdot=np.linalg.multi_dot
@@ -43,31 +45,87 @@ def logTwoSlopes(x,pars):
     S=Sigmoid(x-s0,a=s1)
     return y0*(1-S)+y1*S
 
-def Gaussian1D(x):
-    return 1./np.sqrt(2*np.pi)*np.exp(-x**2/2.)
+def Gaussian1D(x,mu=0.,sig=1.):
+    return 1./(sig*np.sqrt(2*np.pi))*np.exp(-(x-mu)**2/(2.*sig**2))
 
-    
+def BetaCDF(x,pars):
+    a,b=pars
+    #a=Sigmoid(a)
+    #b=Sigmoid(b)
+    #print(a,b)
+    return scipy.stats.beta.logcdf(x,a=a,b=b)
+
+
 def Fit_logPA2(x,y,GaussPars=(0,1),func=None):
-
-    w=np.exp(y)
-    ind=np.where(np.isnan(w) | np.isinf(w))[0]
-    w[ind]=0
-    w/=np.sum(w)
-    #w.fill(0)
-    med,sig=GaussPars
-    x0=x[np.where(y==y.max())[0]][0]
-    a0,b0=np.polyfit(x[x<x0], y[x<x0], 1)
-    a1,b1=np.polyfit(x[x>x0], y[x>x0], 1)
-    s0,s1=x0,sig/2.
-    pars0=a0,b0,a1,b1,s0,s1
+    
+    
+    # w=np.exp(y/np.sum(y))
+    # ind=np.where(np.isnan(w) | np.isinf(w))[0]
+    # w[ind]=0
+    # # #w=np.sqrt(w)
+    # w/=np.sum(w)
+    # # #w.fill(0)
+    # # med,sig=GaussPars
+    # # x0=x[np.where(y==y.max())[0]][0]
+    # # print("x0",x0)
+    # # a0,b0=np.polyfit(x[x<x0], y[x<x0], 1)
+    # # a1,b1=np.polyfit(x[x>x0], y[x>x0], 1)
+    # # s0,s1=x0,(sig/2.)
+    # # pars0=a0,b0,a1,b1,s0,s1
 
     def D(pars):
         return np.sum(w*(y-func(x,pars))**2)
         #return np.sum((y-func(x,pars))**2)
+    
+    w=1.
+#     nn=50
+#     print("init")
+#     A,B=np.mgrid[-1:5:nn*1j,-4:2:nn*1j]
+#     A=10**(A)
+#     B=10**(B)
+#     Chi2=np.zeros((nn,nn),np.float32)
+# #    for (a,b) in zip(A.flatten(),B.flatten()):
+#     for i in range(nn):
+#         for j in range(nn):
+#             a=A[i,j]
+#             b=B[i,j]
+#             pars=a,b
+#             Chi2[i,j]=D(pars)
+
+
+#     ind=np.where(Chi2==Chi2.min())
+#     i,j=ind[0][0],ind[1][0]
+#     a,b=A[i,j],B[i,j]
+#     pars0=a,b
+#     print("done init")
+
+
+    F=ClassF(x,np.exp(y))
+    xx=np.linspace(x.min(),x.max(),100)
+    Fi=ClassF(xx,F(xx)).diff()
+    w=Fi(x)
+    #mu=np.sum(F.y*F.x)/np.sum(F.y)
+    #sig=np.sqrt(np.sum(F.y*(F.x-mu)**2)/np.sum(F.y))
+    mu=np.mean(x)
+    sig=np.std(x)
+    
+    al=10**(np.linspace(-1,6,1000))
+    
+    M=1./mu-1.
+    be=al*M
+    V_=al*be/( (al+be)**2 * (al+be+1))
+    Al=ClassF(V_,al)(sig**2)
+    Be=Al*M
+    pars0=Al[()],Be[()]
+    # stop
+    # array([4.49846004e+03, 3.71495573e+00])
+    #3.86731910e+03 3.01140042e+00
+    
     Chi2a=D(pars0)/x.size
     pars=scipy.optimize.minimize(D,pars0)["x"]
+    #print("parsout",pars)
     Chi2b=D(pars)/x.size
-    return pars,Chi2a,Chi2b
+    return pars,Chi2a,Chi2b,pars0
 
     
 
@@ -81,14 +139,18 @@ class ClassShapiroWilk():
         self.AOrderCoef=None
 
     def generateOrderStats(self,n):
-        NTry=1000000
+        NTry=10000
         log.print("Measure order statistics for %i-size using %i samples"%(n,NTry))
         x=self.xSampleFunc
         Lm=[]
         Phix=self.f_Phi(x)
         LX=[]
         for i in range(NTry):
-            LX.append(np.sort(np.random.randn(n)))
+            X0=np.sort(np.random.randn(n))
+            X1=np.sort(-X0)
+            LX.append(X0)
+            LX.append(X1)
+            
 
         X=np.array(LX)
         m=np.mean(X,axis=0)
@@ -105,7 +167,13 @@ class ClassShapiroWilk():
         # self.AOrderCoef=(m/V)/C
         
         V=(1./NTry)*np.dot(X.T,X)
-        Vinv=np.real(ModLinAlg.invSVD(V))
+
+
+        
+
+        
+        #Vinv=ModLinAlg.invSVDHermitianCut(V)#np.real(ModLinAlg.invSVD(V))
+        Vinv=ModLinAlg.invSVDHermitianCut(V,Th=1e-2)
         #Vinv=(Vinv.T+Vinv)/2.
         #Vinv=np.diag(np.diag(Vinv))
         #print(np.diag(np.dot(V,Vinv)))
@@ -119,8 +187,11 @@ class ClassShapiroWilk():
         #print("AOrderCoef",self.AOrderCoef)
         #print("Sum AOrderCoef",np.sum(self.AOrderCoef**2))
         self.VinvOrderCoef=Vinv#np.diag(Vinv)
-        print(self.AOrderCoef)
-        
+        dA=self.AOrderCoef[1:]-self.AOrderCoef[:-1]
+        dA*=np.sign(dA[0])
+        if np.count_nonzero(dA<0)>0:
+            log.print("AOrderCoef is non monotonous")
+            stop
         # m=m.reshape((-1,1))
         # x=m0.reshape((-1,1))
         # C2=mdot([m.T,self.VinvOrderCoef,self.VinvOrderCoef,m]).flat[0]
@@ -137,28 +208,44 @@ class ClassShapiroWilk():
         #     W= ( np.sum(self.AOrderCoef.flatten()*XX.flatten()) )**2 / (np.sum( (XX-np.mean(XX))**2 ) )
         #     #W1=mdot([self.AOrderCoef.reshape((1,-1)),XX])**2
         #     return W
-        self.MaxW=self.giveW(m0)
-        print("ZZ",self.MaxW)
-        Ath=np.array([-0.4968,-.3273,-.2540,-.1988,-.1524,-.1109,-.0725,-.0359])
-        Ath=np.array(Ath.tolist()+[0.]+(-Ath[::-1]).tolist())
-
-        pylab.clf()
-        pylab.plot(self.AOrderCoef.flatten())
-        pylab.plot(Ath)
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
-        stop
         
-        # pylab.figure("Order Stats")
+        self.MaxW=self.giveW(m0)
+        
+        log.print("Maximum possible W value: %f"%self.MaxW)
+
+
+        # # ################### Test coefs 17  #######################
+        
+        # Ath=np.array([-0.4968,-.3273,-.2540,-.1988,-.1524,-.1109,-.0725,-.0359])
+        # Ath=np.array(Ath.tolist()+[0.]+(-Ath[::-1]).tolist())
+
+        
+        # u,s,v=np.linalg.svd(np.complex128(V))
+        # pylab.clf()
         # pylab.subplot(1,2,1)
-        # pylab.plot(self.AOrderCoef)
-        # #pylab.plot(m,self.AOrderCoef)
+        # pylab.plot(np.log(s.flatten()))
+        # #pylab.imshow(Vinv,interpolation="nearest")
+        # #pylab.colorbar()
+        # #pylab.plot(np.log(s.flatten()))
         # pylab.subplot(1,2,2)
-        # pylab.imshow(Vinv,interpolation="nearest")
+        # #pylab.imshow(Vinv1,interpolation="nearest")
+        # #pylab.colorbar()
+        # pylab.plot(self.AOrderCoef.flatten())
+        # #pylab.plot(Ath)
         # pylab.draw()
         # pylab.show(block=False)
         # pylab.pause(0.1)
+        # stop
+        
+        # # pylab.figure("Order Stats")
+        # # pylab.subplot(1,2,1)
+        # # pylab.plot(self.AOrderCoef)
+        # # #pylab.plot(m,self.AOrderCoef)
+        # # pylab.subplot(1,2,2)
+        # # pylab.imshow(Vinv,interpolation="nearest")
+        # # pylab.draw()
+        # # pylab.show(block=False)
+        # # pylab.pause(0.1)
 
         
     def generatePW(self,n,NTry=10000,UseScipy=False):
@@ -178,13 +265,13 @@ class ClassShapiroWilk():
                 #print(scipy.stats.shapiro(self.mOrderCoef)[0])
                 #stop
 
-        print(scipy.stats.shapiro(self.mOrderCoef)[0])
-        print(self.giveW(self.AOrderCoef))#self.mOrderCoef))
-        X=np.random.randn(n)
-        X=np.random.randn(n)
-        print("one",self.giveW(X))
-        X[0]=-4
-        print("two",self.giveW(X))
+        # print(scipy.stats.shapiro(self.mOrderCoef)[0])
+        # print(self.giveW(self.AOrderCoef))#self.mOrderCoef))
+        # X=np.random.randn(n)
+        # X=np.random.randn(n)
+        # print("one",self.giveW(X))
+        # X[0]=-4
+        # print("two",self.giveW(X))
          
         log.print("Compute cumulative distribution...")
         P=self.empirical_FA2=giveIrregularCumulDist(np.array(L_y),Type="Continuous")
@@ -195,9 +282,12 @@ class ClassShapiroWilk():
         self.empirical_PA2=P1.diff()
         m0,m1=PT(np.array([0.16,0.5]))
         med,sig=m1,m1-m0
-        func=logTwoSlopes
+        # log.print("Fit cumulative distribution...")
+        # func=logTwoSlopes
+        # self.pars_fit_logPA2,Chi2a,Chi2b,parsinit=Fit_logPA2(self.empirical_PA2.x,np.log(self.empirical_PA2.y),GaussPars=(med,sig),func=func)
         log.print("Fit cumulative distribution...")
-        self.pars_fit_logPA2,Chi2a,Chi2b=Fit_logPA2(self.empirical_PA2.x,np.log(self.empirical_PA2.y),GaussPars=(med,sig),func=func)
+        func=BetaCDF
+        self.pars_fit_logPA2,Chi2a,Chi2b,parsinit=Fit_logPA2(self.empirical_FA2.x,np.log(self.empirical_FA2.y),GaussPars=(med,sig),func=func)
         log.print("  reduced Chi-square of fit = ( %f -> %f )"%(Chi2a,Chi2b))
         self.logP_A2=lambda x: func(x,self.pars_fit_logPA2)
 
@@ -206,16 +296,33 @@ class ClassShapiroWilk():
         Pm=self.empirical_PA2
         Pfit=self.logP_A2
 
+        mu=med#self.empirical_FA2.T()(0.5)
+        mu=np.sum(Pm.y*Pm.x)/np.sum(Pm.y)
+        sig=np.sqrt(np.sum(Pm.y*(Pm.x-mu)**2)/np.sum(Pm.y))
+
+        xx=np.linspace(0.,1.,1000)
+        self.fP_A2=ClassF(x,np.exp(self.logP_A2(x))).diff()
         
         fig=pylab.figure("logP-W")
-        # pylab.subplot(2,2,1)
-        # pylab.plot(Fm.x,Fm.y)
-        # pylab.xlim(0,100)
-        # pylab.subplot(2,2,2)
+        
+        pylab.subplot(1,2,1)
+        pylab.scatter(Fm.x,np.log(Fm.y))
+        xx=Fm.x#np.linspace(0.01,0.99,100)
+        pylab.plot(Fm.x,func(Fm.x,parsinit))
+        pylab.plot(Fm.x,self.logP_A2(Fm.x),ls="--",color="black")
+        pylab.xlim(Fm.x.min(),Fm.x.max())
+        # y=Phi(Fm.x,mu=mu,sig=sig)
+        # y/=y.max()
+        # pylab.plot(Fm.x,y)
+        #pylab.xlim(0,100)
+        pylab.subplot(1,2,2)
         #pylab.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
         #pylab.scatter(Pm.x,Pm.y)#,edgecolors="black")
-        pylab.scatter(Pm.x,(Pm.y/np.sum(Pm.y)))#,edgecolors="black")
+        pylab.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
         #pylab.plot(Pm.x,Pfit(Pm.x))
+        pylab.plot(self.fP_A2.x,np.log(self.fP_A2.y),ls="--",color="black")
+        #pylab.plot(Pm.x,np.log(Gaussian1D(Pm.x,mu=mu,sig=sig)),ls=":")
+        pylab.xlim(Pm.x.min(),Pm.x.max())
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
