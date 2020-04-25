@@ -12,6 +12,7 @@ from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 
 import ClassInitGammaCube
 from ClassAndersonDarling import *
+from ClassShapiroWilk import *
 
 class ClassLikelihoodMachine():
     def __init__(self,CM):
@@ -52,14 +53,15 @@ class ClassLikelihoodMachine():
             GM=self.MassFunction.GammaMachine
             self.LCAD=[]
             
-            CAD=ClassAndersonDarlingMachine()
-            CAD.generatePA2(100,NTry=10000)
             for iSlice in range(self.NSlice):
+                CAD=ClassAndersonDarlingMachine()
+                CAD.generatePA2(GM.L_NParms[iSlice],NTry=2000)
                 self.LCAD.append(CAD)
-            # for iSlice in range(self.NSlice):
-            #     CAD=ClassAndersonDarlingMachine()
-            #     CAD.generatePA2(GM.L_NParms[iSlice],NTry=2000)
-            #     self.LCAD.append(CAD)
+                
+            for iSlice in range(self.NSlice):
+                CAD=ClassAndersonDarlingMachine()
+                CAD.generatePA2(GM.L_NParms[iSlice],NTry=2000)
+                self.LCAD.append(CAD)
                 
     def measure_dLdg(self,g0,DoPlot=0):
         g=g0.copy()

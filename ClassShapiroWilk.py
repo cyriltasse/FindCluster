@@ -137,7 +137,7 @@ class ClassShapiroWilk():
         # pylab.pause(0.1)
 
         
-    def generatePW(self,n,NTry=10000):
+    def Init(self,n,NTry=10000):
         L_y=[]
         if self.AOrderCoef is None: self.generateOrderStats(n)
         log.print("Number of generated %i-size samples: %i"%(n,NTry))
@@ -294,8 +294,6 @@ class ClassShapiroWilk():
     # ################################## logP
     
     def logP_x(self,X):
-        if self.logP_W is None:
-            self.generatePW(X.size)
         return self.logP_W(self.giveW(X))
     
     def dlogPdx(self,x):

@@ -42,7 +42,7 @@ def testDist():
         print("doing n=%i"%n)
         CAD=ClassShapiroWilk()
         # CAD.generateOrderStats(n)
-        CAD.generatePW(n,NTry=1000)
+        CAD.Init(n,NTry=1000)
         #CAD.generatePW(n,NTry=30000,UseScipy=True)
 
 
@@ -55,7 +55,7 @@ def testJacob():
     X=X0.copy()
 
     CAD=ClassShapiroWilk()
-    CAD.generatePW(X.size)
+    CAD.Init(X.size)
     
     J2a=CAD.meas_dW_dx(X)
     #J2b,J2b1=CAD.give_dW_dx(X)
@@ -112,7 +112,7 @@ def testJacob():
     
     # ########################################
     # ##################### logP #############
-    CAD.generatePW(X.size,NTry=1000)
+    CAD.Init(X.size,NTry=1000)
     
     Ha=CAD.meas_dlogP_dx(X)
     Hb=CAD.dlogPdx(X)
@@ -193,7 +193,7 @@ def testMin():
     iStep=0
     pylab.clf()
     
-    CAD.generatePW(X.size,NTry=10000)
+    CAD.Init(X.size,NTry=10000)
     
     while True:
 
