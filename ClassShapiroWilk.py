@@ -70,7 +70,7 @@ def Fit_logPW(x,y,GaussPars=(0,1),func=None):
     w=Fi(x)
     mu=np.mean(x)
     sig=np.std(x)
-    al=10**(np.linspace(-1,6,1000))
+    al=10**(np.linspace(-1,7,1000))
     M=1./mu-1.
     be=al*M
     V_=al*be/( (al+be)**2 * (al+be+1))
@@ -162,6 +162,11 @@ class ClassShapiroWilk():
         self.empirical_PW=P1.diff()
         m0,m1=PT(np.array([0.16,0.5]))
         med,sig=m1,m1-m0
+        log.print("W-distribution (Med, Sig)=(%f, %f)"%(med,sig))
+        self.EmpWDistMed=med
+        self.EmpWDistSig=sig
+
+        
         log.print("Fit cumulative distribution...")
         func=BetaCDF
         self.pars_fit_logPW,Chi2a,Chi2b,parsinit=Fit_logPW(self.empirical_FW.x,np.log(self.empirical_FW.y),GaussPars=(med,sig),func=func)
@@ -193,7 +198,7 @@ class ClassShapiroWilk():
         pylab.xlim(Pm.x.min(),Pm.x.max())
         pylab.draw()
         pylab.show(block=False)
-        pylab.pause(0.1)
+
 
     # #########################
     def giveW(self,X0,DoPlot=False):
@@ -296,25 +301,28 @@ class ClassShapiroWilk():
     def logP_x(self,X):
         return self.logP_W(self.giveW(X))
     
-    def dlogPdx(self,x):
+    def dlogPdx(self,x,Break=False):
         
         dWdx=self.dW_dx(x)
         W=self.giveW(x)
+        # print(dWdx)
+        # print(W)
+        # print(self.dlogPdW(W))
+        # if Break:
+        #     stop
         return self.dlogPdW(W)*dWdx
 
     def dlogPdW(self,W):
-        if self.logP_W is None:
-            log.print("Need a logP function")
-            stop
-        dx=0.001
-        return (self.logP_W(W+dx)-self.logP_W(W-dx))/(2*dx)#
+        dx=self.EmpWDistSig/100.
+        x0=np.max([0.,W-dx])
+        x1=np.min([1.,W+dx])
+        return (self.logP_W(x1)-self.logP_W(x0))/(x1-x0)#
 
     def d2logPdW(self,W):
-        if self.logP_W is None:
-            log.print("Need a logP function")
-            stop
-        dx=0.001
-        return (self.dlogPdW(W+dx)-self.dlogPdW(W-dx))/(2*dx)#
+        dx=self.EmpWDistSig/100.
+        x0=np.max([0.,W-dx])
+        x1=np.min([1.,W+dx])
+        return (self.dlogPdW(x1)-self.dlogPdW(x0))/(x1-x0)#
             
     def d2logPdx2(self,X):
         W=self.giveW(X)

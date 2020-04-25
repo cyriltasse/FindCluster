@@ -17,14 +17,14 @@
 
 from ClassAndersonDarling import *
 
-# # ##############################
-# # Catch numpy warning
-# np.seterr(all='raise')
-# import warnings
-# warnings.filterwarnings('error')
-# #with warnings.catch_warnings():
-# #    warnings.filterwarnings('error')
-# # ##############################
+# ##############################
+# Catch numpy warning
+np.seterr(all='raise')
+import warnings
+warnings.filterwarnings('error')
+#with warnings.catch_warnings():
+#    warnings.filterwarnings('error')
+# ##############################
 from ClassShapiroWilk import *
 
 
@@ -162,10 +162,11 @@ def testJacob():
 
     
 def testMin():
+    pylab.close("all")
     np.random.seed(43)
     X0=np.float64(np.random.rand(50)-1)*2
     X0=np.random.rand(5)*0.01
-    X0=np.random.randn(100)*2.+1#*0.1#+1#*0.1+2
+    X0=np.random.rand(3000)*20.+1#*0.1#+1#*0.1+2
     #X0=np.linspace(-0.2,0.2,3)
     #X0=np.concatenate([X0,np.random.rand(50)-3])
     # X0=np.float64(np.random.rand(50))
@@ -174,7 +175,7 @@ def testMin():
     # X0[1]=-3
     X=X0.copy()
 
-    CAD=ClassAndersonDarlingMachine()
+    CAD=ClassShapiroWilk()
     
     # pylab.clf()
     # ax=pylab.subplot(1,2,1)
@@ -186,15 +187,14 @@ def testMin():
     # pylab.pause(0.1)
     # return
 
-    Alpha=np.float64(np.array([1]))
+    Alpha=np.float64(np.array([1]))/1000
     L_A=[]
     L_W=[]
     L_logP=[]
     iStep=0
-    pylab.clf()
     
     CAD.Init(X.size,NTry=10000)
-    
+
     while True:
 
         print("================ %i =============="%iStep)
@@ -206,11 +206,15 @@ def testMin():
         print("W   = %f"%W)
         print("logP = %f"%logP)
 
+        m=np.mean(X)
+        sig=np.std(X)
+        X=(X-m)/sig
         #J=CAD.give_dW_dx(X)[1]
         #J=CAD.dW_dx(X)
-        J=-CAD.dlogPdx(X)
-
-        if iStep%10==0:
+        J=-CAD.dlogPdx(X)#,Break=(iStep==2))
+        # print(J)
+        # if iStep==2: stop
+        if iStep%1==0:
             x,y=C.giveCumulDist(X,Ns=1000,Norm=True,xmm=(-10,10))
             xJ,yJ=C.giveCumulDist(J,Ns=1000,Norm=True)
             x0,y0=C.giveCumulDist(X0,Ns=1000,Norm=True,xmm=(-10,10))
@@ -245,7 +249,7 @@ def testMin():
             print(CAD.logP_W(CAD.giveW(X)))
 
             
-        if iStep%10==0:
+        if (iStep+1)%10==0:
             Alpha*=1.5
         print("Alpha=%f"%Alpha)
             

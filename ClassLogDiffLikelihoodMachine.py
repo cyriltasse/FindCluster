@@ -52,16 +52,17 @@ class ClassLikelihoodMachine():
         if self.MAP:
             GM=self.MassFunction.GammaMachine
             self.LCAD=[]
+            self.LCSW=[]
             
-            for iSlice in range(self.NSlice):
-                CAD=ClassAndersonDarlingMachine()
-                CAD.generatePA2(GM.L_NParms[iSlice],NTry=2000)
-                self.LCAD.append(CAD)
+            # for iSlice in range(self.NSlice):
+            #     CAD=ClassAndersonDarlingMachine()
+            #     CAD.generatePA2(GM.L_NParms[iSlice],NTry=2000)
+            #     self.LCAD.append(CAD)
                 
             for iSlice in range(self.NSlice):
-                CAD=ClassAndersonDarlingMachine()
-                CAD.generatePA2(GM.L_NParms[iSlice],NTry=2000)
-                self.LCAD.append(CAD)
+                CAD=ClassShapiroWilk()
+                CAD.Init(GM.L_NParms[iSlice],NTry=2000)
+                self.LCSW.append(CAD)
                 
     def measure_dLdg(self,g0,DoPlot=0):
         g=g0.copy()
@@ -143,6 +144,8 @@ class ClassLikelihoodMachine():
         if self.MAP:
             for CAD in self.LCAD:
                 L+=CAD.logP_x(g.flatten())
+            for CSW in self.LCSW:
+                L+=CSW.logP_x(g.flatten())
             # k=g.size
             # gTg=np.dot(g.T,g).flat[0]+1e-10
             # L+= - (1/2.)*gTg + (k/2-1)*np.log(gTg)
@@ -218,7 +221,9 @@ class ClassLikelihoodMachine():
             #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
 
             if self.MAP:
-                J[iPar:jPar]+=self.LCAD[iSlice].dlogPdx(g[iPar:jPar].flatten())
+                #J[iPar:jPar]+=self.LCAD[iSlice].dlogPdx(g[iPar:jPar].flatten())
+                J[iPar:jPar]+=self.LCSW[iSlice].dlogPdx(g[iPar:jPar].flatten())
+                
             ii+=ThisNParms
             
         # if self.MAP:
@@ -322,7 +327,8 @@ class ClassLikelihoodMachine():
             #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
             
             if self.MAP:
-                J[iPar:jPar]+=np.abs(self.LCAD[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
+                #J[iPar:jPar]+=np.abs(self.LCAD[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
+                J[iPar:jPar]+=np.abs(self.LCSW[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
             ii+=ThisNParms
             
         # k=g0.size
