@@ -302,6 +302,7 @@ class ClassRunLM_Cov():
         L_g=[]
         StepPlot=10
         while True:
+            g=self.CLM.recenterNorm(g)
             T.reinit()
             log.print("======================== Doing step = %i ========================"%iStep)
             if iStep%StepPlot==0 and self.DoPlot:

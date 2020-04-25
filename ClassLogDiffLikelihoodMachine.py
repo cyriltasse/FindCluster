@@ -340,3 +340,14 @@ class ClassLikelihoodMachine():
         # #     #J[:]+= -1 # + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
         
         return J
+
+    def recenterNorm(self,X):
+        GM=self.MassFunction.GammaMachine
+        L_NParms=GM.L_NParms
+        for iSlice in range(self.NSlice):
+            ThisNParms=L_NParms[iSlice]
+            iPar=ii
+            jPar=iPar+ThisNParms
+            X[iPar:jPar]=(X[iPar:jPar]-np.mean(X[iPar:jPar]))/np.std(X[iPar:jPar])
+            ii+=ThisNParms
+        return X
