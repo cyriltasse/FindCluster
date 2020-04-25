@@ -219,17 +219,16 @@ class ClassShapiroWilk():
         xm=np.mean(x)
         A=np.sum((x-xm)**2)
         aTx=np.sum(a*x)
-        dw_dx0=2*a*aTx/A
-        dw_dx1=-2.* A**(-2) * (aTx)**2 * (x-xm)
-        dw_dx1= (aTx)**2 * (x-xm)
-        #dw_dx1=-2.*(1-1/n)/(A**2) * (aTx)**2 * (x-xm)
-        dw_dx=dw_dx0+dw_dx1
-        dw_dx=dw_dx1
-        # #dw_dx=dw_dx1
-        # dw_dx=(2./(n*A**2)) * (x-xm)
-        #dw_dx= (x-xm)
-        #dw_dx=2. * (1.-1./n) * (x-xm)
-        return dw_dx[indInv]
+        # # ###########
+        # # ok
+        B=2*a*aTx/A
+        D=(aTx)**2 * (x-xm)
+        E=A**(-2)*np.ones((n,),np.float32)
+        C= E * D
+        dW_dx=B-2*C
+        return dW_dx[indInv]
+        # #############
+        
 
     # #########################
     # Hessian
@@ -244,22 +243,19 @@ class ClassShapiroWilk():
         xm=np.mean(x)
         A=np.sum((x-xm)**2)
         aTx=np.sum(a*x)
-        #dw_dx0=2/A*a**2
-        #dw_dx1=-2*A**(-2)*( aTx**2 * (1-1/n) + 2*aTx*a*(x-xm))
-        #dw_dx=dw_dx0+dw_dx1
-
-        dB_dx=2*aTx*a*( -2 * A**(-2) * (x-xm) ) + 2 * A**(-1) * a**2
+        # #################
+        # ok
+        dB_dx=-4*aTx* A**(-2) * a * (x-xm)  + 2 * A**(-1) * a**2
+        #return dB_dx[indInv]
+        dD_dx=(x-xm)*2*a*aTx+(aTx)**2*(1.-1/n)
+        dE_dx=-4*A**(-3)*(x-xm)
         D=aTx**2*(x-xm)
-        dD_dx=(x-xm)*2*a+(aTx)**2
-        dC_dx=- ( 2*A**(-2)* dD_dx - 4 * D * (x-xm) * A**(-3) )
-        
-        dw_dx=dB_dx + dC_dx
-        dw_dx= dC_dx
-        dw_dx= dD_dx
-
-
-        return dw_dx[indInv]
-
+        E=A**(-2)
+        dC_dx= ( D*dE_dx+E*dD_dx)
+        dJ_dx=dB_dx-2*dC_dx
+        return dJ_dx[indInv]
+        # #################
+    
     # #########################
     # Measure
     
@@ -280,7 +276,6 @@ class ClassShapiroWilk():
         
         return np.array(LJ)
 
-    
     def meas_d2W_dx2(self,X):
         LH=[]
         for iParm in range(X.size):

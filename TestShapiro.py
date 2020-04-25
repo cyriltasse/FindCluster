@@ -51,7 +51,7 @@ def testDist():
 def testJacob():
     pylab.close("all")
     np.random.seed(43)
-    X0=np.random.randn(300)#*2+1
+    X0=np.random.randn(10)#*2+1
     X=X0.copy()
 
     CAD=ClassShapiroWilk()
@@ -108,7 +108,7 @@ def testJacob():
     pylab.draw()
     pylab.show(block=False)
     pylab.pause(0.1)
-    return
+
     
     # ########################################
     # ##################### logP #############
