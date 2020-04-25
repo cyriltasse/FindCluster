@@ -60,6 +60,7 @@ class ClassLikelihoodMachine():
             #     self.LCAD.append(CAD)
                 
             for iSlice in range(self.NSlice):
+                log.print("Init ShapiroWilk for slice %i"%iSlice)
                 CAD=ClassShapiroWilk()
                 CAD.Init(GM.L_NParms[iSlice],NTry=2000)
                 self.LCSW.append(CAD)
@@ -144,8 +145,13 @@ class ClassLikelihoodMachine():
         if self.MAP:
             for CAD in self.LCAD:
                 L+=CAD.logP_x(g.flatten())
-            for CSW in self.LCSW:
-                L+=CSW.logP_x(g.flatten())
+            ii=0
+            for iSlice in range(self.NSlice):
+                ThisNParms=L_NParms[iSlice]
+                iPar=ii
+                jPar=iPar+ThisNParms
+                L+=self.LCSW[iSlice].logP_x(g.flatten()[iPar:jPar])
+                ii+=ThisNParms
             # k=g.size
             # gTg=np.dot(g.T,g).flat[0]+1e-10
             # L+= - (1/2.)*gTg + (k/2-1)*np.log(gTg)
@@ -328,7 +334,7 @@ class ClassLikelihoodMachine():
             
             if self.MAP:
                 #J[iPar:jPar]+=np.abs(self.LCAD[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
-                J[iPar:jPar]+=np.abs(self.LCSW[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
+                J[iPar:jPar]+=(self.LCSW[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
             ii+=ThisNParms
             
         # k=g0.size
@@ -344,6 +350,7 @@ class ClassLikelihoodMachine():
     def recenterNorm(self,X):
         GM=self.MassFunction.GammaMachine
         L_NParms=GM.L_NParms
+        ii=0
         for iSlice in range(self.NSlice):
             ThisNParms=L_NParms[iSlice]
             iPar=ii

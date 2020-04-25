@@ -31,6 +31,7 @@ from DDFacet.Other import AsyncProcessPool
 # from DDFacet.Other import AsyncProcessPool
 import scipy.optimize
 import GeneDist
+import ClassPlotMachine
 
 # # ##############################
 # # Catch numpy warning
@@ -94,9 +95,8 @@ class ClassRunLM_Cov():
         self.NPix=int(self.FOV/self.CellDeg)
         if (self.NPix%2)!=0:
             self.NPix+=1
-            
-        # self.NPix=5
-        
+
+        #self.NPix=5
         log.print("Choosing NPix=%i"%self.NPix)
 
         self.CM=ClassCatalogMachine.ClassCatalogMachine()
@@ -132,9 +132,9 @@ class ClassRunLM_Cov():
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
 
-        ###########################
-        self.finaliseInit()
-        ###########################
+        # ###########################
+        # self.finaliseInit()
+        # ###########################
 
         self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
 
@@ -198,16 +198,17 @@ class ClassRunLM_Cov():
         # self.X=self.GM.CubeToVec(GammaCube)
         
         self.XSimul=self.X.copy()
-        self.GM.PlotGammaCube(X=self.X,FigName="Simul")
-        self.CubeSimul=self.GM.GammaCube.copy()
+        self.CubeSimul=self.GM.giveGammaCube(self.X)
+        self.GM.PlotGammaCube(Cube=np.log10(self.CubeSimul),FigName="Simul")
+        
         
         GM=self.GM
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
 
         
-        print(":!::")
-        #n_z.fill(1./self.CellRad**2)
-        #n_z*=30
+        # print(":!::")
+        # n_z.fill(1./self.CellRad**2)
+        #n_z*=10
         n_zt=self.CM.Cat_s.n_zt
         
         n_zt=[]
@@ -261,7 +262,7 @@ class ClassRunLM_Cov():
         self.CM.Cat_s.yCube[:]=Y[:]
         self.CM.Cat_s.n_zt[:]=n_zt
         
-    def runLM(self,NMaxSteps=300):
+    def runLM(self,NMaxSteps=3000):
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
         if self.XSimul is not None:
@@ -272,7 +273,10 @@ class ClassRunLM_Cov():
         g=self.X
         #g.fill(0)
 
-        log.print("True Likelihood = %.5f"%(self.CLM.L(g)))
+        LTrue=self.CLM.L(g)
+        log.print("True Likelihood = %.5f"%(LTrue))
+        PM=ClassPlotMachine.ClassPlotMachine(self.CLM,XSimul=self.XSimul)
+
         # g.fill(0)
         # log.print("True Likelihood = %.5f"%(self.CLM.L(g)))
         iStep=0
@@ -294,20 +298,22 @@ class ClassRunLM_Cov():
         C=GeneDist.ClassDistMachine()
         #g.fill(0)
         g.flat[:]=np.random.randn(g.size)*0.1
+        g.flat[:]=np.random.rand(g.size)*0.1
         Alpha=1.
         # self.CLM.measure_dLdg(g)
         # self.CLM.measure_dJdg(g)
         # return
         L_L=[]
         L_g=[]
-        StepPlot=10
+        StepPlot=100
         while True:
+            HasConverged=False
             g=self.CLM.recenterNorm(g)
             T.reinit()
             log.print("======================== Doing step = %i ========================"%iStep)
-            if iStep%StepPlot==0 and self.DoPlot:
-                self.GM.PlotGammaCube(X=g,OutName="g%4.4i.png"%iStep)
-                T.timeit("Plot Gamma Cube")
+            # if iStep%StepPlot==0 and self.DoPlot:
+            #     self.GM.PlotGammaCube(X=g,OutName="g%4.4i.png"%iStep)
+            #     T.timeit("Plot Gamma Cube")
             # self.CLM.measure_dLdg(g)
             # stop
             T.timeit("Plot")
@@ -325,8 +331,8 @@ class ClassRunLM_Cov():
                     log.print("  dL=%f"%(dL))
                     dgest=np.median(np.abs(g-L_g[-1]))
                     log.print("  dg=%f"%(dgest))
-                    if iStep>NMaxSteps or np.abs(dL)<0.01:
-                        return g
+                    if iStep>NMaxSteps:# or np.abs(dL)<0.001:
+                        HasConverged=True
                     #if dgest<1e-4:
                     #    return g
             L_g.append(g.copy())
@@ -345,107 +351,14 @@ class ClassRunLM_Cov():
             T.timeit("Step i+1")
 
             iStep+=1
-            if iStep%StepPlot!=0: continue
+            if iStep%StepPlot!=0 and not(HasConverged): continue
             
-            dJdg=self.CLM.dJdg(g).flat[:]
-            T.timeit("Compute H")
-
-            figH=pylab.figure("hist")
-            pylab.clf()
-            ii=0
-            for iSlice in range(self.CLM.NSlice):
-                ThisNParms=L_NParms[iSlice]
-                iPar=ii
-                jPar=iPar+ThisNParms
-                ii+=ThisNParms
-                pylab.subplot(2,2,1)
-                #pylab.plot(dldg[iPar:jPar])
-                C=GeneDist.ClassDistMachine()
-                x,y=C.giveCumulDist(g[iPar:jPar],Ns=100,Norm=True)#,xmm=[-5,5])
-                pylab.plot(x,y)
-                #pylab.plot(g[iPar:jPar])
-
-            pylab.subplot(2,2,2)
-            pylab.plot(L_L)
+            # ########################################################
+            # ################### Plot ###############################
+            PM.PlotHist(g)
             
-            Gamma=self.GM.giveGammaCube(g)
-            Sig=np.sqrt(1./np.abs(dJdg))
+            if HasConverged: return g
             
-            Sig[Sig>1.]=1
-            # Sig=(1./np.abs(dJdg))
-            NTry=100
-            GammaVar=np.zeros_like(Gamma)
-            GammaStat=np.zeros((NTry,self.NSlice,self.NPix,self.NPix),np.float32)
-            for iTry in range(NTry):
-                GammaStat[iTry]=self.GM.giveGammaCube(g+Sig*np.random.randn(*g.shape))
-            y0Cube=np.quantile(GammaStat,0.16,axis=0)
-            y1Cube=np.quantile(GammaStat,0.84,axis=0)
-            y0=y0Cube.flatten()
-            y1=y1Cube.flatten()
-            ycCube=np.quantile(GammaStat,0.50,axis=0)
-            yc=ycCube.flatten()
-            
-            
-            e_Gamma=GammaStd=(y1-y0)/2.#GammaVar/NTry
-            
-            #e_Gamma=np.abs(Gamma-self.GM.giveGammaCube(g+Sig))
-
-            ax=pylab.subplot(2,2,3)
-            #y0=Gamma.flatten()-e_Gamma.flatten()
-            #y1=Gamma.flatten()+e_Gamma.flatten()
-            x=np.arange(Gamma.size)
-            ax.fill_between(x,y0,y1, facecolor='gray', alpha=0.5)
-            pylab.plot(Gamma.flatten(),color="black")
-            pylab.plot(yc.flatten(),color="black",ls=":")
-            if self.XSimul is not None:
-                ys=self.CubeSimul.flatten()
-                pylab.plot(self.CubeSimul.flatten(),ls="--",color="black")
-            else:
-                ys=0
-                
-            ax=pylab.subplot(2,2,4)
-            y0=Gamma.flatten()-e_Gamma.flatten()
-            y1=Gamma.flatten()+e_Gamma.flatten()
-            ym=y=Gamma.flatten()
-            ey=e_Gamma.flatten()
-            #v=((y-ys)/ey) # pylab.hist(,bins=50)
-            # C=GeneDist.ClassDistMachine()
-            # x,y=C.giveCumulDist(v,Ns=100,Norm=True,xmm=[-5,5])
-            # x1,y1=C.giveCumulDist(np.random.randn(1000),Ns=100,Norm=True,xmm=[-5,5])
-            # pylab.plot(x,y,color="black")
-            # pylab.plot(x1,y1,ls=":",color="black")
-
-            v0=y0-ys
-            vc=yc-ys
-            vm=ym-ys
-            v1=y1-ys
-            
-            C=GeneDist.ClassDistMachine()
-            x0,y0=C.giveCumulDist(v0,Ns=100,Norm=True,xmm=[-5,5])
-            x1,y1=C.giveCumulDist(v1,Ns=100,Norm=True,xmm=[-5,5])
-            xc,yc=C.giveCumulDist(vc,Ns=100,Norm=True,xmm=[-5,5])
-            xm,ym=C.giveCumulDist(vm,Ns=100,Norm=True,xmm=[-5,5])
-
-            # pylab.plot(x0,y0,color="black")
-            # pylab.plot(x1,y1,color="black")
-            pylab.fill_between(x0,y0,y1,color="gray")
-            pylab.plot(xc,yc,color="black",ls=":")
-            pylab.plot(xm,ym,color="black")
-            #pylab.plot([0,0],[0,1],color="black",ls=":")
-            pylab.grid()
-            # ax.fill_between(x,y0-ys,y1-ys, facecolor='gray', alpha=0.5)
-            # pylab.plot(Gamma.flatten()-ys,color="black")
-            pylab.draw()
-            pylab.show(block=False)
-            pylab.pause(0.1)
-            T.timeit("Plot Sim")
-            figH.savefig("Hist%5.5i.png"%iStep)
-            #self.GM.PlotGammaCube(Cube=y0Cube,FigName="Cube0")
-            #self.GM.PlotGammaCube(Cube=y1Cube,FigName="Cube1")
-            #self.GM.PlotGammaCube(Cube=ycCube,FigName="CubeC")
-            eCube=ycCube/((y1Cube-y0Cube)/2.)
-            self.GM.PlotGammaCube(Cube=eCube,FigName="eCube")
-
         # g0=np.zeros_like(g)
         # g0=np.random.randn(g.size)
         # Res=scipy.optimize.minimize(f,g0)

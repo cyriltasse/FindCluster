@@ -183,23 +183,25 @@ class ClassShapiroWilk():
 
         xx=np.linspace(0.,1.,1000)
         
-        fig=pylab.figure("logP-W")
+        # fig=pylab.figure("logP-W")
+        # fig.clf()
+        # ax=fig.add_subplot(1,2,1)
+        # ax.cla()
+        # ax.scatter(Fm.x,np.log(Fm.y))
+        # xx=Fm.x#np.linspace(0.01,0.99,100)
+        # ax.plot(Fm.x,func(Fm.x,parsinit))
+        # ax.plot(Fm.x,BetaCDF(Fm.x,self.pars_fit_logPW),ls="--",color="black")
+        # ax.set_xlim(Fm.x.min(),Fm.x.max())
+        # ax=fig.add_subplot(1,2,2)
+        # ax.cla()
+        # ax.scatter(Pscipy1.diff().x,np.log(Pscipy1.diff().y),c="red")
+        # ax.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
+        # ax.plot(Pm.x,self.logP_W(Pm.x),ls="--",color="black")
+        # ax.set_xlim(Pm.x.min(),Pm.x.max())
+        # pylab.draw()
+        # pylab.show(block=False)
+        # pylab.pause(0.1)
         
-        pylab.subplot(1,2,1)
-        pylab.scatter(Fm.x,np.log(Fm.y))
-        xx=Fm.x#np.linspace(0.01,0.99,100)
-        pylab.plot(Fm.x,func(Fm.x,parsinit))
-        pylab.plot(Fm.x,BetaCDF(Fm.x,self.pars_fit_logPW),ls="--",color="black")
-        pylab.xlim(Fm.x.min(),Fm.x.max())
-        pylab.subplot(1,2,2)
-        pylab.scatter(Pscipy1.diff().x,np.log(Pscipy1.diff().y),c="red")
-        pylab.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
-        pylab.plot(Pm.x,self.logP_W(Pm.x),ls="--",color="black")
-        pylab.xlim(Pm.x.min(),Pm.x.max())
-        pylab.draw()
-        pylab.show(block=False)
-
-
     # #########################
     def giveW(self,X0,DoPlot=False):
         X=np.sort(X0)

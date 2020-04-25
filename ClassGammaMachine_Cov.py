@@ -16,11 +16,13 @@ from DDFacet.Array import ModLinAlg
 log = logger.getLogger("ClassGammaMachine")
 import ClassCovMatrix_Gauss
 import ClassCovMatrix_Sim3D_2
+import GeneDist
+
 
 from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 from DDFacet.Other import AsyncProcessPool
 from DDFacet.Array import shared_dict
-
+import ClassShapiroWilk
 def GiveNXNYPanels(Ns,ratio=800/500):
     nx=int(round(np.sqrt(Ns/ratio)))
     ny=int(nx*ratio)
@@ -205,7 +207,7 @@ class ClassGammaMachine():
         ssqs=np.sqrt(ss)
         
         ind=np.where(ssqs>0)[0]
-        ind=np.where(ssqs>1e-3*ssqs.max())[0]
+        ind=np.where(ssqs>1e-2*ssqs.max())[0]
         S0=Us.shape
 
         Us=Us[:,ind]
@@ -245,13 +247,15 @@ class ClassGammaMachine():
             ii+=N
         return XOut
 
-    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None):
+    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None,vmm=None):
         # return
         if X is not None:
             self.computeGammaCube(X)
         if Cube is None:
             Cube=self.GammaCube
 
+
+            
         import pylab
 
         fact=1.8
@@ -267,7 +271,11 @@ class ClassGammaMachine():
             ax=pylab.subplot(Nx,Ny,iPlot+1)
             self.AxList.append(ax)
             if np.count_nonzero(np.isnan(S))>0: stop
-            pylab.imshow(S,interpolation="nearest")#,vmin=0.5,vmax=2.)
+            if vmm is not None:
+                vmin,vmax=vmm
+            else:
+                vmin,vmax=S.min(),S.max()
+            pylab.imshow(S,interpolation="nearest",vmin=vmin,vmax=vmax)
             pylab.title("[%.2f - %.2f]"%(S.min(),S.max()))
         #pylab.tight_layout()
         pylab.draw()
@@ -285,6 +293,31 @@ class ClassGammaMachine():
         # pylab.show(False)
         # pylab.pause(0.1)
 
+    def PlotCumulDistX(self,X=None,FigName="Hist X",vmm=None):
+
+
+            
+
+        fact=1.8
+        figsize=(13/fact,8/fact)
+        fig=pylab.figure(FigName,figsize=figsize)
+        Nx,Ny=GiveNXNYPanels(self.NSlice,ratio=figsize[0]/figsize[1])
+        fig.clf()
+        ii=0
+        for iPlot in range(self.NSlice):
+            iSlice=iPlot
+            N=self.L_NParms[iSlice]
+            x=X[ii:ii+self.L_NParms[iSlice]].flatten()
+            ii+=N
+            ax=pylab.subplot(Nx,Ny,iPlot+1)
+            C=GeneDist.ClassDistMachine()
+            x,y=C.giveCumulDist(x,Ns=1000,Norm=True)#,xmm=[-5,5])
+            ax.plot(x,y,color="black")
+            ax.plot(x,ClassShapiroWilk.Phi(x),ls=":",color="black")
+            
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.1)
 
     def computeGammaCube(self,X):
 
