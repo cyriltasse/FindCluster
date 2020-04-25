@@ -7,7 +7,7 @@ import scipy.optimize
 from ModIrregular import *
 from DDFacet.Other import logger
 log = logger.getLogger("ClassAndersonDarling")
-from killMS.Array import ModLinAlg
+import ModLinAlg
 erf=scipy.special.erf
 G=scipy.special.gamma
 logG=scipy.special.loggamma
