@@ -323,7 +323,7 @@ class ClassGammaMachine():
 
         if self.CurrentX is not None:
             if np.allclose(self.CurrentX,X):
-                log.print("Current cube ok, skipping computation...")
+                #log.print("Current cube ok, skipping computation...")
                 return
         self.CurrentX=X.copy()
         

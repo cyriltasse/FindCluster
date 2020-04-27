@@ -7,6 +7,7 @@ import ClassMassFunction
 from astropy.cosmology import WMAP9 as cosmo
 from DDFacet.Other import logger
 log = logger.getLogger("PlotMachine")
+import os
 
 from DDFacet.Other import ModColor
 from DDFacet.Other import ClassTimeIt
@@ -20,12 +21,19 @@ import ClassDisplayRGB
 
 import scipy.optimize
 import GeneDist
+def GiveNXNYPanels(Ns,ratio=800/500):
+    nx=int(round(np.sqrt(Ns/ratio)))
+    ny=int(nx*ratio)
+    if nx*ny<Ns: ny+=1
+    return nx,ny
 
+from ClassShapiroWilk import *
 
 class ClassPlotMachine():
     def __init__(self,
                  CLM,
-                 XSimul=None):
+                 XSimul=None,StepPlot=100,DicoSourceXY=None):
+        self.DicoSourceXY=DicoSourceXY
         self.CLM=CLM
         self.GM=CLM.MassFunction.GammaMachine
         self.L_L=[]
@@ -34,90 +42,116 @@ class ClassPlotMachine():
             log.print("Set XSimul with L=%f"%self.LTrue)
             self.XSimul=XSimul
             self.CubeSimul=self.GM.giveGammaCube(self.XSimul)
+        self.iFig=0
+        self.iCall=0
+        self.StepPlot=StepPlot
+        os.system("rm *.png")
+        
+    def Plot(self,g,Force=False):
+        if (self.iCall%self.StepPlot==0) or Force:
+            log.print("Call %i... plotting"%self.iCall)
+            self.PlotHist(g)
+            self.iFig+=1
+        self.iCall+=1
 
-            
-    def PlotHist(self,g):
+    def PlotHist(self,g,NTry=100):
         GM=self.GM
         L_NParms=GM.L_NParms
         dJdg=self.CLM.dJdg(g).flat[:]
         L=self.CLM.L(g)
-        self.L_L.append(L)
+        #self.L_L.append(L)
         LTrue=self.LTrue
         L_L=self.L_L
         
-        figH=pylab.figure("hist")
-        figH.clf()
-        ii=0
-        pylab.subplot(2,2,1)
-        for iSlice in range(self.CLM.NSlice):
-            ThisNParms=L_NParms[iSlice]
-            iPar=ii
-            jPar=iPar+ThisNParms
-            ii+=ThisNParms
-            C=GeneDist.ClassDistMachine()
-            x,y=C.giveCumulDist(g[iPar:jPar],Ns=100,Norm=True)#,xmm=[-5,5])
-            pylab.plot(x,y)
-
-        pylab.subplot(2,2,2)
-        pylab.plot((L_L),color="black")
-        pylab.plot(([LTrue]*len(L_L)),ls="--",color="black")
-        Sig=np.sqrt(1./np.abs(dJdg))
+        C=GeneDist.ClassDistMachine()
+        
         
         #Sig[Sig>1.]=1
         # Sig=(1./np.abs(dJdg))
-        NTry=200
+        
+        Sig=np.sqrt(1./np.abs(dJdg))
         
         GammaStat=np.zeros((NTry,self.GM.NSlice,self.GM.NPix,self.GM.NPix),np.float32)
         for iTry in range(NTry):
             GammaStat[iTry]=(self.GM.giveGammaCube(g+Sig*np.random.randn(*g.shape)))
 
-        Cube_mean=np.mean(GammaStat,axis=0)
+        GammaStat[GammaStat<1e-10]=1e-10
+        
         CubeSimul=self.CubeSimul
-
         Scale="log"
         if Scale=="log":
             GammaStat=np.log10(GammaStat)
             CubeSimul=np.log10(CubeSimul)
-        qList=[[0.15e-2,0.9985],
-               [2.5e-2,0.975],
-               [0.16,0.84]]
+        Cube_mean=np.mean(GammaStat,axis=0)
+            
         ys=CubeSimul.flatten()
-        def FillBetween(G,q0,q1):
+        def FillBetween(Gin,q0,q1,iSlice=None,PlotMed=False):
+            if iSlice is not None:
+                s=slice(iSlice,iSlice+1)
+            else:
+                s=slice(None)
+            G=Gin[:,s,:,:]
             C=GeneDist.ClassDistMachine()
             Cube_q0=np.quantile(G,q0,axis=0)
             Cube_q1=np.quantile(G,q1,axis=0)
-            v0=Cube_q0.flatten()-ys
-            v1=Cube_q1.flatten()-ys
+            v0=Cube_q0.flatten()-CubeSimul[s,:,:].flatten()
+            v1=Cube_q1.flatten()-CubeSimul[s,:,:].flatten()
             x0,y0=C.giveCumulDist(v0,Ns=1000,Norm=True)
             x1,y1=C.giveCumulDist(v1,Ns=1000,Norm=True)
             x=np.concatenate([x0,x1[::-1]])
             y=np.concatenate([y0,y1[::-1]])
             pylab.fill(x,y,color="black",alpha=0.2)
             pylab.plot(x,y,color="black",alpha=0.2)
-        
-        ax=pylab.subplot(2,2,3)
-        for (q0,q1) in qList:
-            FillBetween(GammaStat,q0,q1)
-            
-        Cube_q50=np.quantile(GammaStat,0.5,axis=0)
-        v0=Cube_q50.flatten()-ys
-        x0,y0=C.giveCumulDist(v0,Ns=1000,Norm=True)
-        pylab.plot(x0,y0,ls="--",color="black")
+            if PlotMed:
+                v0=np.quantile(G,0.5,axis=0).flatten()-CubeSimul[s,:,:].flatten()
+                x0,y0=C.giveCumulDist(v0,Ns=1000,Norm=True)
+                pylab.plot(x0,y0,ls="--",color="black")
+                
+        # # ##################################        
+        # figH=pylab.figure("hist")
+        # figH.clf()
+        # ii=0
+        # pylab.subplot(2,2,1)
+        # for iSlice in range(self.CLM.NSlice):
+        #     ThisNParms=L_NParms[iSlice]
+        #     iPar=ii
+        #     jPar=iPar+ThisNParms
+        #     ii+=ThisNParms
+        #     x,y=C.giveCumulDist(g[iPar:jPar],Ns=100,Norm=True)#,xmm=[-5,5])
+        #     pylab.plot(x,y,color="gray")
 
-        Cube_mean=np.mean(GammaStat,axis=0)
-        v0=Cube_mean.flatten()-ys
-        x0,y0=C.giveCumulDist(v0,Ns=1000,Norm=True)
-        pylab.plot(x0,y0,ls=":",color="red")
+        # pylab.plot(x,(Phi(x)),color="black",ls="--")
+        # pylab.subplot(2,2,2)
+        # pylab.plot((L_L),color="black")
+        # pylab.plot(([LTrue]*len(L_L)),ls="--",color="black")
+
+        # ax=pylab.subplot(2,2,3)
         
-        pylab.xlim(-5,5)
-        pylab.grid()
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
+        # FillBetween(GammaStat,0.15e-2,0.9985)
+        # FillBetween(GammaStat,2.5e-2,0.975)
+        # FillBetween(GammaStat,0.16,0.84,PlotMed=True)
+            
+        # # Cube_q50=np.quantile(GammaStat,0.5,axis=0)
+        # # v0=Cube_q50.flatten()-ys
+        # # x0,y0=C.giveCumulDist(v0,Ns=1000,Norm=True)
+        # # pylab.plot(x0,y0,ls="--",color="black")
+
+        # Cube_mean=np.mean(GammaStat,axis=0)
+        # v0=Cube_mean.flatten()-ys
+        # x0,y0=C.giveCumulDist(v0,Ns=1000,Norm=True)
+        # pylab.plot(x0,y0,ls=":",color="red")
+        
+        # pylab.xlim(-5,5)
+        # pylab.grid()
+        # pylab.draw()
+        # pylab.show(block=False)
+        # pylab.pause(0.1)
+        # # ##################################        
 
         # self.GM.PlotGammaCube(Cube=(MeanCube-self.CubeSimul)/eCube,FigName="eCube",vmm=(-3,3))
         
-        self.GM.PlotGammaCube(Cube=(Cube_mean),FigName="log(MeanCube)")
+        # self.GM.PlotGammaCube(Cube=(Cube_mean),FigName="log(MeanCube)")
+        
         # self.GM.PlotCumulDistX(g)
             
         # figH.savefig("Hist%5.5i.png"%iStep)
@@ -129,3 +163,89 @@ class ClassPlotMachine():
         # self.GM.PlotGammaCube(Cube=(MeanCube-self.CubeSimul)/eCube,FigName="eCube",vmm=(-3,3))
         # self.GM.PlotGammaCube(Cube=np.log(MeanCube),FigName="log(MeanCube)")
         # self.GM.PlotCumulDistX(g)
+
+
+        fact=1.8/2.
+        figsize=(13/fact,8/fact)
+        Nx,Ny=GiveNXNYPanels(self.GM.NSlice,ratio=figsize[0]/figsize[1])
+        
+        fig=pylab.figure("Diff Sim",figsize=figsize)
+        #fig, axes = pylab.subplots(num="Diff Sim",ncols=Ny, nrows=Nx, figsize=(5,5))#, sharex=True, sharey=True)
+        fig.clf()
+        fig.subplots_adjust(hspace=0,
+                            wspace=0,
+                            left = 0.05,
+                            right = 0.95,
+                            bottom = 0.05,
+                            top = 0.95)
+        
+        
+        ii=0
+        
+        #        for iPlot,ax0 in enumerate(axes.flat):
+        vmin=-2
+        vmax=2
+
+        for iPlot in range(self.GM.NSlice):
+            iSlice=iPlot
+            ax0=fig.add_subplot(Nx,Ny,iPlot+1)
+            ax0.imshow(Cube_mean[iSlice]-CubeSimul[iSlice],
+                       interpolation="nearest",
+                       aspect="auto",
+                       #extent=(-5,5,0,1),
+                       alpha=0.5,
+                       vmin=vmin,
+                       vmax=vmax)
+            ax0.scatter(self.DicoSourceXY[iSlice]["X"],self.DicoSourceXY[iSlice]["Y"],color="black",s=7)
+            ax0.axis('off')
+            ax0.set_xlim(0,self.GM.NPix)
+            ax0.set_ylim(0,self.GM.NPix)
+            ax = fig.add_axes(ax0.get_position(), frameon=False)
+            FillBetween(GammaStat,0.15e-2,0.9985,iSlice=iSlice)
+            FillBetween(GammaStat,2.5e-2,0.975,iSlice=iSlice)
+            FillBetween(GammaStat,0.16,0.84,iSlice=iSlice,PlotMed=True)
+            y=np.sort([0,0.15e-2,0.9985,2.5e-2,0.975,0.16,0.84,1])
+            x=np.zeros_like(y)
+            ax.plot(x,y,ls=":", linewidth=2,color="black")
+            ax.scatter(x,y,color="red",s=5,edgecolors="red")
+            ax.grid(color='black', linestyle=':')#, linewidth=2)
+            
+            #pylab.grid()
+            pylab.xlim(vmin,vmax)
+            pylab.ylim(0,1)
+        pylab.draw()
+        mng = pylab.get_current_fig_manager()
+        #mng.frame.Maximize(True)
+        #mng.resize(*mng.window.maxsize())
+        pylab.show(block=False)
+        pylab.pause(0.01)
+        fig.savefig("DiffSimSlice%4.4i.png"%self.iFig)
+
+        
+        
+    def PlotW(self,X,FigName="WDist"):
+
+        fact=1.8
+        figsize=(13/fact,8/fact)
+        fig=pylab.figure(FigName,figsize=figsize)
+        fig.clf()
+        Nx,Ny=GiveNXNYPanels(self.GM.NSlice,ratio=figsize[0]/figsize[1])
+        fig.clf()
+        ii=0
+        
+        for iPlot,CAD in enumerate(self.CLM.LCSW):
+            iSlice=iPlot
+            N=self.GM.L_NParms[iSlice]
+            x=X[ii:ii+self.GM.L_NParms[iSlice]].flatten()
+            ii+=N
+            W=CAD.giveW(x)
+            ax=pylab.subplot(Nx,Ny,iPlot+1)
+            pylab.plot(CAD.empirical_PW.x,CAD.empirical_PW.y,color="black")
+            pylab.plot(CAD.empirical_PW.x,np.exp(CAD.logP_W(CAD.empirical_PW.x)),color="black",ls="--")
+            pylab.scatter([W],[np.exp(CAD.logP_W(W))],color="red")
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.01)
+            
+
+        

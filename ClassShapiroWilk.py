@@ -6,7 +6,7 @@ import GeneDist
 import scipy.optimize
 from ModIrregular import *
 from DDFacet.Other import logger
-log = logger.getLogger("ClassAndersonDarling")
+log = logger.getLogger("ClassShapiroWilk")
 import ModLinAlg
 erf=scipy.special.erf
 G=scipy.special.gamma

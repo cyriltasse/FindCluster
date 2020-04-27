@@ -210,7 +210,7 @@ class ClassRunLM_Cov():
         # n_z.fill(1./self.CellRad**2)
         #n_z*=10
         n_zt=self.CM.Cat_s.n_zt
-        
+        DicoSourceXY={}
         n_zt=[]
         X=[]
         Y=[]
@@ -224,25 +224,35 @@ class ClassRunLM_Cov():
             ThisNzt[iSlice]=1
             for i in range(self.NPix):
                 for j in range(self.NPix):
+                    #if i!=j: continue
+
                     n=n_z[iSlice]*GammaSlice[i,j]*self.CellRad**2
                     
                     #print("n=%f"%n)
                     #print(":!::")
                     # N=int(n)
-                    N=scipy.stats.poisson.rvs(n,size=1)[0]
-                    self.NCube[iSlice,i,j]=N
-                    for iObj in range(N):
-                        X.append(i)
-                        Y.append(j)
-                        ThisX.append(i)
-                        ThisY.append(j)
-                        n_zt.append(ThisNzt.copy()/self.CellRad**2)
 
+                    ii=i
+                    jj=j
+                    # ii=self.NPix//2
+                    # jj=self.NPix//2                    
+                    N=scipy.stats.poisson.rvs(n,size=1)[0]
+                    #N=10
+                    self.NCube[iSlice,ii,jj]=N
+                    for iObj in range(N):
+                        X.append(ii)
+                        Y.append(jj)
+                        ThisX.append(ii)
+                        ThisY.append(jj)
+                        n_zt.append(ThisNzt.copy()/self.CellRad**2)
+                    
             ThisX=np.float32(np.array(ThisX))
             ThisY=np.float32(np.array(ThisY))
             ThisX+=np.random.rand(ThisX.size)-0.5
             ThisY+=np.random.rand(ThisX.size)-0.5
             ax=GM.AxList[iSlice].scatter(ThisY,ThisX,s=0.5,c="red")
+            DicoSourceXY[iSlice]={"X":ThisY,"Y":ThisX}
+        self.DicoSourceXY=DicoSourceXY
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
@@ -275,7 +285,10 @@ class ClassRunLM_Cov():
 
         LTrue=self.CLM.L(g)
         log.print("True Likelihood = %.5f"%(LTrue))
-        PM=ClassPlotMachine.ClassPlotMachine(self.CLM,XSimul=self.XSimul)
+        PM=ClassPlotMachine.ClassPlotMachine(self.CLM,
+                                             XSimul=self.XSimul,
+                                             DicoSourceXY=self.DicoSourceXY,
+                                             StepPlot=20)
 
         # g.fill(0)
         # log.print("True Likelihood = %.5f"%(self.CLM.L(g)))
@@ -299,15 +312,23 @@ class ClassRunLM_Cov():
         #g.fill(0)
         g.flat[:]=np.random.randn(g.size)*0.1
         g.flat[:]=np.random.rand(g.size)*0.1
+        g.flat[:]=np.random.randn(g.size)
         Alpha=1.
         # self.CLM.measure_dLdg(g)
         # self.CLM.measure_dJdg(g)
         # return
-        L_L=[]
-        L_g=[]
-        StepPlot=100
+        factAlpha=1.1
+        HasConverged=False
+        
+        g=self.CLM.recenterNorm(g)
+        L=self.CLM.L(g)
+        L_L=[L]
+        L_dL=[]
+        PM.L_L=L_L
+        L_g=[g.copy()]
+        PM.Plot(g)
+        
         while True:
-            HasConverged=False
             g=self.CLM.recenterNorm(g)
             T.reinit()
             log.print("======================== Doing step = %i ========================"%iStep)
@@ -318,27 +339,52 @@ class ClassRunLM_Cov():
             # stop
             T.timeit("Plot")
             L=self.CLM.L(g)
-            T.timeit("Compute L")
-            if iStep>0:
-                dL=L-L_L[-1]
-                if L<L_L[-1]:
-                    fact=1.5
-                    log.print("decreasing Alpha: %f -> %f"%(Alpha,Alpha/fact))
-                    Alpha/=fact
-                    g=L_g[-1]
-                    continue
-                elif L!=L_L[-1]:
-                    log.print("  dL=%f"%(dL))
-                    dgest=np.median(np.abs(g-L_g[-1]))
-                    log.print("  dg=%f"%(dgest))
-                    if iStep>NMaxSteps:# or np.abs(dL)<0.001:
-                        HasConverged=True
-                    #if dgest<1e-4:
-                    #    return g
-            L_g.append(g.copy())
-            L_L.append(L)
-            
             log.print("Likelihood = %.5f"%(L))
+            T.timeit("Compute L")
+            UpdateX=True
+            
+            dL=L-L_L[-1]
+            if Alpha<1e-7 or HasConverged:
+                log.print(ModColor.Str("STOP"))
+                PM.PlotHist(g,NTry=500)
+                return g
+            if L<L_L[-1]:
+                log.print(ModColor.Str("Things are getting worse"))
+                log.print(ModColor.Str("   decreasing Alpha: %f -> %f"%(Alpha,Alpha/factAlpha)))
+                log.print(ModColor.Str("   back to previous best estimate"))
+                Alpha/=factAlpha
+                g=L_g[-1]
+            else:
+                log.print("Ok... continue descent...")
+                log.print("  Alpha=%f"%(Alpha))
+                log.print("  dL=%f"%(dL))
+                L_dL.append(dL)
+                dgest=np.median(np.abs(g-L_g[-1]))
+                log.print("  dg=%f"%(dgest))
+                
+                if (iStep>NMaxSteps):
+                    log.print(ModColor.Str("Has reached max number of steps"))
+                    HasConverged=True
+                    
+                
+                if dL!=0 and len(L_dL)>20:
+                    Mean_dL=np.mean(np.array(L_dL)[-10:])
+                    log.print("  Mean_dL=%f"%Mean_dL)
+                    if Mean_dL<0.001:
+                        log.print(ModColor.Str("Likelihood does not improve anymore"))
+                        HasConverged=True
+                    
+                if (iStep+1)%100==0:
+                    log.print(ModColor.Str("increasing Alpha: %f -> %f"%(Alpha,Alpha*factAlpha),col="green"))
+                    Alpha*=factAlpha
+                    
+                PM.Plot(g)
+                L_g.append(g.copy())
+                L_L.append(L)
+                #if dgest<1e-4:
+                #    return g
+                    
+
             dldg=self.CLM.dLdg(g).flat[:]#/ssqs.flat[:]
             T.timeit("Compute J")
             
@@ -346,18 +392,20 @@ class ClassRunLM_Cov():
             # Alpha=1000*np.abs(epsilon)
             # print(epsilon)
             
+            
             dldg=1/(1 + np.exp(-dldg))-0.5
             g.flat[:] += Alpha*dldg
+                
             T.timeit("Step i+1")
 
-            iStep+=1
-            if iStep%StepPlot!=0 and not(HasConverged): continue
             
             # ########################################################
             # ################### Plot ###############################
-            PM.PlotHist(g)
+
             
-            if HasConverged: return g
+
+            iStep+=1
+            
             
         # g0=np.zeros_like(g)
         # g0=np.random.randn(g.size)
