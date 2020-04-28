@@ -46,7 +46,7 @@ def test(DoPlot=False,ComputeInitCube=False):
     rac_deg,decc_deg=241.20678,55.59485 # cluster
     FOV=0.15
     FOV=0.05
-    FOV=0.05
+    FOV=0.10
 #    FOV=0.02
 
     SubField={"rac_deg":rac_deg,
@@ -206,22 +206,38 @@ class ClassRunLM_Cov():
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
 
         
-        # print(":!::")
+        # # print(":!::")
         # n_z.fill(1./self.CellRad**2)
-        #n_z*=10
+        # n_z*=0.5
+        
+        # pylab.clf()
+        # pylab.plot(n_z)
+        # pylab.draw()
+        # pylab.show()
+        
         n_zt=self.CM.Cat_s.n_zt
         DicoSourceXY={}
         n_zt=[]
         X=[]
         Y=[]
+        LP=[]
         self.NCube=np.zeros_like(GM.GammaCube)
         for iSlice in range(self.NSlice):
             GammaSlice=GM.GammaCube[iSlice]
             ThisNzt=np.zeros((self.NSlice,),np.float32)
+            sig=0.05
+            z=self.GM.zmg
+            p=1./(sig*np.sqrt(2.*np.pi)) * np.exp(-(z-z[iSlice])**2/(2.*sig**2))
+            p/=np.sum(p)
+            # p.fill(0)            
+            # p[iSlice]=1
+            # #print(p)
+            ThisNzt[:]=p[:]
             ThisX=[]
             ThisY=[]
+            LNzt=[]
+            
             # if iSlice>0: continue
-            ThisNzt[iSlice]=1
             for i in range(self.NPix):
                 for j in range(self.NPix):
                     #if i!=j: continue
@@ -232,45 +248,57 @@ class ClassRunLM_Cov():
                     #print(":!::")
                     # N=int(n)
 
-                    ii=i
-                    jj=j
+                    ii=j
+                    jj=i
                     # ii=self.NPix//2
                     # jj=self.NPix//2                    
                     N=scipy.stats.poisson.rvs(n,size=1)[0]
                     #N=10
                     self.NCube[iSlice,ii,jj]=N
                     for iObj in range(N):
+                        #print(ii,jj)
                         X.append(ii)
                         Y.append(jj)
                         ThisX.append(ii)
                         ThisY.append(jj)
                         n_zt.append(ThisNzt.copy()/self.CellRad**2)
-                    
+                        LNzt.append(ThisNzt.copy()/self.CellRad**2)
+                        LP.append(ThisNzt.copy())
             ThisX=np.float32(np.array(ThisX))
             ThisY=np.float32(np.array(ThisY))
-            ThisX+=np.random.rand(ThisX.size)-0.5
-            ThisY+=np.random.rand(ThisX.size)-0.5
-            ax=GM.AxList[iSlice].scatter(ThisY,ThisX,s=0.5,c="red")
-            DicoSourceXY[iSlice]={"X":ThisY,"Y":ThisX}
-        self.DicoSourceXY=DicoSourceXY
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
-        #self.GM.PlotGammaCube(Cube=self.NCube,FigName="NCube")
+            
+            DicoSourceXY[iSlice]={"X":ThisX,"Y":ThisY,"LNzt":np.array(LNzt)}
+
+
+            
         log.print("Total number of objects in the simulated catalog: %i"%len(X))
 
         # self.XSimul=self.X=self.GM.CubeToVec(self.NCube)
         
         
         
-        n_zt=np.array(n_zt)
         X=np.array(X)
         Y=np.array(Y)
         self.CM.Cat_s=np.zeros((X.size,),self.CM.Cat_s.dtype)
         self.CM.Cat_s=self.CM.Cat_s.view(np.recarray)
-        self.CM.Cat_s.xCube[:]=X[:]
-        self.CM.Cat_s.yCube[:]=Y[:]
+        self.CM.Cat_s.xCube[:]=np.round(Y[:])
+        self.CM.Cat_s.yCube[:]=np.round(X[:])
         self.CM.Cat_s.n_zt[:]=n_zt
+        #self.CM.Cat_s.n_zt*=10
+        DicoSourceXY["X"]=X
+        DicoSourceXY["Y"]=Y
+        DicoSourceXY["P"]=np.array(LP)
+        n_zt=np.array(n_zt)
+        s=self.CM.Cat_s.n_zt[:]*self.CellRad**2*5
+        self.DicoSourceXY=DicoSourceXY
+        for iSlice in range(self.GM.NSlice):
+            ax=GM.AxList[iSlice].scatter(X,Y,c="red",s=s[:,iSlice],linewidth=0)
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.1)
+
+        #self.GM.PlotGammaCube(Cube=self.NCube,FigName="NCube")
+
         
     def runLM(self,NMaxSteps=3000):
         T=ClassTimeIt.ClassTimeIt()
@@ -288,7 +316,7 @@ class ClassRunLM_Cov():
         PM=ClassPlotMachine.ClassPlotMachine(self.CLM,
                                              XSimul=self.XSimul,
                                              DicoSourceXY=self.DicoSourceXY,
-                                             StepPlot=20)
+                                             StepPlot=100)
 
         # g.fill(0)
         # log.print("True Likelihood = %.5f"%(self.CLM.L(g)))

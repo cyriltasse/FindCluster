@@ -60,7 +60,7 @@ def BetaPDF(x,pars):
     return scipy.stats.beta.logpdf(x,a=a,b=b)
 
 
-def Fit_logPW(x,y,GaussPars=(0,1),func=None):
+def Fit_logPW_Beta(x,y,GaussPars=(0,1),func=None):
     def D(pars):
         return np.sum(w*(y-func(x,pars))**2)
     w=1.
@@ -82,6 +82,24 @@ def Fit_logPW(x,y,GaussPars=(0,1),func=None):
     Chi2b=D(pars)/x.size
     return pars,Chi2a,Chi2b,pars0
 
+
+def logGaussW(x,pars):
+    a,sig=pars
+    sig=np.abs(sig)
+    y=a-np.log(sig*np.sqrt(2.*np.pi))+(-(x-1.)**2/(2.*sig**2))
+    return y
+
+def Fit_logPW_Gauss(x,y,GaussPars=(0,1)):
+    func=logGaussW
+    def D(pars):
+        return np.sum(w*(y-func(x,pars))**2)
+    w=1.
+    mean,sig=GaussPars
+    pars0=0.,sig
+    Chi2a=D(pars0)/x.size
+    pars=scipy.optimize.minimize(D,pars0)["x"]
+    Chi2b=D(pars)/x.size
+    return pars,Chi2a,Chi2b,pars0
     
 
 
@@ -169,9 +187,12 @@ class ClassShapiroWilk():
         
         log.print("Fit cumulative distribution...")
         func=BetaCDF
-        self.pars_fit_logPW,Chi2a,Chi2b,parsinit=Fit_logPW(self.empirical_FW.x,np.log(self.empirical_FW.y),GaussPars=(med,sig),func=func)
-        log.print("  reduced Chi-square of fit = ( %f -> %f )"%(Chi2a,Chi2b))
+        self.pars_fit_logPW,Chi2a,Chi2b,parsinit=Fit_logPW_Beta(self.empirical_FW.x,np.log(self.empirical_FW.y),GaussPars=(med,sig),func=func)
         self.logP_W=lambda x: BetaPDF(x,self.pars_fit_logPW)
+        # func=logGaussW
+        # self.pars_fit_logPW,Chi2a,Chi2b,parsinit=Fit_logPW_Gauss(self.empirical_PW.x,np.log(self.empirical_PW.y),GaussPars=(sig,sig))
+        # self.logP_W=lambda x: logGaussW(x,self.pars_fit_logPW)
+        log.print("  reduced Chi-square of fit = ( %f -> %f )"%(Chi2a,Chi2b))
         
         Fm=self.empirical_FW
         Pm=self.empirical_PW
@@ -183,24 +204,24 @@ class ClassShapiroWilk():
 
         xx=np.linspace(0.,1.,1000)
         
-        # fig=pylab.figure("logP-W")
-        # fig.clf()
-        # ax=fig.add_subplot(1,2,1)
-        # ax.cla()
-        # ax.scatter(Fm.x,np.log(Fm.y))
-        # xx=Fm.x#np.linspace(0.01,0.99,100)
-        # ax.plot(Fm.x,func(Fm.x,parsinit))
-        # ax.plot(Fm.x,BetaCDF(Fm.x,self.pars_fit_logPW),ls="--",color="black")
-        # ax.set_xlim(Fm.x.min(),Fm.x.max())
-        # ax=fig.add_subplot(1,2,2)
-        # ax.cla()
-        # ax.scatter(Pscipy1.diff().x,np.log(Pscipy1.diff().y),c="red")
-        # ax.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
-        # ax.plot(Pm.x,self.logP_W(Pm.x),ls="--",color="black")
-        # ax.set_xlim(Pm.x.min(),Pm.x.max())
-        # pylab.draw()
-        # pylab.show(block=False)
-        # pylab.pause(0.1)
+        fig=pylab.figure("logP-W")
+        fig.clf()
+        ax=fig.add_subplot(1,2,1)
+        ax.cla()
+        ax.scatter(Fm.x,np.log(Fm.y))
+        xx=Fm.x#np.linspace(0.01,0.99,100)
+        ax.plot(Fm.x,func(Fm.x,parsinit))
+        ax.plot(Fm.x,BetaCDF(Fm.x,self.pars_fit_logPW),ls="--",color="black")
+        ax.set_xlim(Fm.x.min(),Fm.x.max())
+        ax=fig.add_subplot(1,2,2)
+        ax.cla()
+        ax.scatter(Pscipy1.diff().x,np.log(Pscipy1.diff().y),c="red")
+        ax.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
+        ax.plot(Pm.x,self.logP_W(Pm.x),ls="--",color="black")
+        ax.set_xlim(Pm.x.min(),Pm.x.max())
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.1)
         
     # #########################
     def giveW(self,X0,DoPlot=False):

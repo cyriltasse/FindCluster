@@ -195,11 +195,27 @@ class ClassPlotMachine():
                        #extent=(-5,5,0,1),
                        alpha=0.5,
                        vmin=vmin,
-                       vmax=vmax)
-            ax0.scatter(self.DicoSourceXY[iSlice]["X"],self.DicoSourceXY[iSlice]["Y"],color="black",s=7)
+                       vmax=vmax,
+                       origin="lower")
+#            ax0.scatter(self.DicoSourceXY[iSlice]["X"],self.DicoSourceXY[iSlice]["Y"],color="black",s=7)
+
+
+            s=self.DicoSourceXY["P"][:,iSlice]
+            rgba_colors = np.zeros((s.size,4))
+            rgba_colors[:,1:3] = 0
+            rgba_colors[:, 3] = s
+            Ns=self.CLM.CM.Cat_s.xCube.size
+            dx=np.random.rand(Ns)-0.5
+            dy=np.random.rand(Ns)-0.5
+            ax0.scatter(self.DicoSourceXY["X"]+dx,self.DicoSourceXY["Y"]+dy,s=3, color=rgba_colors)#,c="black",2*s[:,iSlice])
+            
+            # rgba_colors[:,1:3] = 1
+            #ax0.scatter(self.CLM.CM.Cat_s.xCube+dx,self.CLM.CM.Cat_s.yCube+dy,s=3, color=rgba_colors)#,c="black",2*s[:,iSlice])
+            
             ax0.axis('off')
             ax0.set_xlim(0,self.GM.NPix)
             ax0.set_ylim(0,self.GM.NPix)
+            
             ax = fig.add_axes(ax0.get_position(), frameon=False)
             FillBetween(GammaStat,0.15e-2,0.9985,iSlice=iSlice)
             FillBetween(GammaStat,2.5e-2,0.975,iSlice=iSlice)

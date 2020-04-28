@@ -275,7 +275,7 @@ class ClassGammaMachine():
                 vmin,vmax=vmm
             else:
                 vmin,vmax=S.min(),S.max()
-            pylab.imshow(S,interpolation="nearest",vmin=vmin,vmax=vmax)
+            pylab.imshow(S,interpolation="nearest",vmin=vmin,vmax=vmax,origin="lower")
             pylab.title("[%.2f - %.2f]"%(S.min(),S.max()))
         #pylab.tight_layout()
         pylab.draw()

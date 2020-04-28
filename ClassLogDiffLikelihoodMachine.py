@@ -53,12 +53,15 @@ class ClassLikelihoodMachine():
             GM=self.MassFunction.GammaMachine
             self.LCAD=[]
             self.LCSW=[]
-            self.PowerMAP=2.#2.5
+            self.PowerMAP=4.#2.5
             # for iSlice in range(self.NSlice):
             #     CAD=ClassAndersonDarlingMachine()
             #     CAD.generatePA2(GM.L_NParms[iSlice],NTry=2000)
             #     self.LCAD.append(CAD)
                 
+            # self.CSWFull=ClassShapiroWilk()
+            # self.CSWFull.Init(GM.NParms,NTry=2000)
+            
             for iSlice in range(self.NSlice):
                 log.print("=======================================")
                 log.print("Init ShapiroWilk for slice %i"%iSlice)
@@ -153,6 +156,10 @@ class ClassLikelihoodMachine():
                 jPar=iPar+ThisNParms
                 L+=self.PowerMAP*self.LCSW[iSlice].logP_x(g.flatten()[iPar:jPar])
                 ii+=ThisNParms
+                
+            # if self.CSWFull is not None:
+            #     L+=self.CSWFull.logP_x(g.flatten())
+            
             # k=g.size
             # gTg=np.dot(g.T,g).flat[0]+1e-10
             # L+= - (1/2.)*gTg + (k/2-1)*np.log(gTg)
@@ -234,6 +241,8 @@ class ClassLikelihoodMachine():
             ii+=ThisNParms
             
         # if self.MAP:
+        #     J+=self.CSWFull.dlogPdx(g.flatten())
+            
         #     k=g0.size
         #     gTg=np.sum(g0**2)+1e-10
         #     J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
@@ -337,6 +346,9 @@ class ClassLikelihoodMachine():
                 #J[iPar:jPar]+=np.abs(self.LCAD[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
                 J[iPar:jPar]+=self.PowerMAP*(self.LCSW[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
             ii+=ThisNParms
+            
+        # if self.MAP:
+        #     J[:]+=self.CSWFull.d2logPdx2(g.flatten())
             
         # k=g0.size
         # gTg=np.sum(g0**2)+1e-10
