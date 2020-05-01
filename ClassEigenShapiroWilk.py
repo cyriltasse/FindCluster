@@ -9,6 +9,7 @@ class ClassEigenShapiroWilk():
     def __init__(self,L_NParms,NTry=2000,NPerTest=20):
         self.L_NParms=L_NParms
         self.DicoCSW_N={}
+        self.NTry=NTry
 
         self.NSlice=len(self.L_NParms)
         DicoCSW={}
@@ -33,7 +34,7 @@ class ClassEigenShapiroWilk():
                     log.print("Initialising ClassSW with n=%i"%n)
                     #CSW=ClassShapiroWilk.ClassShapiroWilk()
                     CSW=ClassAndersonDarling.ClassAndersonDarlingMachine()
-                    CSW.Init(n,NTry=2000)
+                    CSW.Init(n,NTry=self.NTry)
                     DicoCSW[n]=CSW
                 Ln.append(n)
                 Li0i1.append((i0,i1))
@@ -76,7 +77,7 @@ class ClassEigenShapiroWilk():
             ii+=ThisNParms
         return dLdx
 
-    def d2logPdx2(self,g):
+    def d2logPdx2_Diag(self,g):
         dJdx=np.zeros((g.size,),np.float64)
         ii=0
         for iSlice in range(self.NSlice):
@@ -94,6 +95,23 @@ class ClassEigenShapiroWilk():
             ii+=ThisNParms
         return dJdx
 
+    def d2logPdx2_Full(self,g):
+        dJdx=np.zeros((g.size,g.size),np.float64)
+        ii=0
+        for iSlice in range(self.NSlice):
+            ThisNParms=self.L_NParms[iSlice]
+            iPar=ii
+            jPar=iPar+ThisNParms
+            gg=g[iPar:jPar]
+            dJdxs=dJdx[iPar:jPar,iPar:jPar]
+            iii=0
+#            for n in self.DicoSlice[iSlice]["ListN"]:
+            for n,(i0,i1) in zip(self.DicoSlice[iSlice]["ListN"],self.DicoSlice[iSlice]["List_i0i1"]):
+                ggg=gg[i0:i1]
+                dJdxs[i0:i1,i0:i1]+=self.DicoCSW[n].d2logPdx2_full(ggg)
+                iii+=n
+            ii+=ThisNParms
+        return dJdx
 
 
     def recenterNorm(self,g):

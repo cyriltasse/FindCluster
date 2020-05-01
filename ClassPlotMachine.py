@@ -119,7 +119,7 @@ class ClassPlotMachine():
             gArray=np.array([g+Sig*np.random.randn(*g.shape) for iTry in range(NTry)])
         elif FullHessian:
             log.print("  building Hessian...")
-            dJdG=self.CLM.buildFulldJdg(g)
+            dJdG=self.CLM.dJdg(g,Diag=False)
             dJdG=(dJdG+dJdG.T)/2.
             # idJdG=ModLinAlg.invSVD(dJdg)
             log.print("  doing SVD...")

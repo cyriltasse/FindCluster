@@ -77,9 +77,9 @@ class ClassLikelihoodMachine():
 
         dL_dg0=self.dLdg(g)
         NN=g.size
-        dg=.001
+        dg=.0001
 
-        NTest=10
+        NTest=100
         # Parm_id=np.arange(NN)[::-1][0:NTest]
         Parm_id=np.int64(np.random.rand(NTest)*g.size)
         dL_dg1=np.zeros((Parm_id.size,),np.float64)
@@ -95,8 +95,9 @@ class ClassLikelihoodMachine():
         pylab.figure("Jacob")
         pylab.clf()
         # pylab.plot(dL_dg0[Parm_id]/dL_dg1)
-        pylab.plot(dL_dg0[Parm_id])
-        pylab.plot(dL_dg1)
+        pylab.plot(dL_dg0[Parm_id],label="Computed")
+        pylab.plot(dL_dg1,ls="--",label="Measured")
+        pylab.legend()
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
@@ -115,31 +116,72 @@ class ClassLikelihoodMachine():
         Parm_id=np.int64(np.random.rand(NTest)*g.size)
         dJdg1=np.zeros((Parm_id.size,),np.float64)
 
-        dJdg0=self.dJdg(g)
+        MAP=True
+        dJdg0=self.dJdg(g,Diag=True,MAP=MAP)
+        dJdg0_Full=self.dJdg(g,
+                             Diag=False,
+                             MAP=MAP,
+                             ParmId=Parm_id)
+        
         #dJdg2=self.buildFulldJdg(g,ParmId=Parm_id)
         pylab.figure("Hessian")
         pylab.clf()
-        pylab.plot(dJdg0[Parm_id])
-        #pylab.plot(np.diag(dJdg2)[Parm_id])
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
+        pylab.plot(dJdg0[Parm_id],label="Pure Diag",color="black")
+        pylab.plot(np.diag(dJdg0_Full)[Parm_id],label="np.diag(Full)",ls="--",lw=2)
+        # #pylab.plot(np.diag(dJdg2)[Parm_id])
+        # pylab.draw()
+        # pylab.show(block=False)
+        # pylab.pause(0.1)
 
         dLdg_0=self.dLdg(g)
         for i in range(Parm_id.size):
             print("%i/%i"%(i,Parm_id.size))
             g1=g.copy()
             g1[Parm_id[i]]+=dg
-            dLdg_1=self.dLdg(g1)
-            print(dLdg_0[Parm_id[i]],dLdg_1[Parm_id[i]])
+            dLdg_1=self.dLdg(g1,MAP=MAP)
             dJdg1[i]=(dLdg_0[Parm_id[i]]-dLdg_1[Parm_id[i]]) / ((g-g1)[Parm_id[i]])
 
         # pylab.plot(dL_dg0[Parm_id]/dL_dg1)
-        pylab.plot(dJdg1)
+        pylab.plot(dJdg1,label="measure of diag",ls="-.",lw=2)
+        pylab.legend()
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
 
+    # ################################################
+
+    def dJdg(self,g0,MAP=True,Diag=True,ParmId=None):
+        if Diag:
+            H=self.d2Pdg2(g0)
+
+            if self.MAP and MAP:
+                H[:]+=self.CSW.d2logPdx2_Diag(g0.flatten())
+        else:
+            H=np.zeros((g0.size,g0.size),np.float64)
+            dg=1e-3
+            dLdg0=self.dLdg(g0,MAP=False)
+
+            if ParmId is None:
+                ParmId=np.arange(g0.size)
+            for ii,i in enumerate(ParmId):
+                print("%i/%i"%(ii,ParmId.size))
+                g1=g0.copy()
+                g1[i]+=dg
+                dLdg1=self.dLdg(g1,MAP=False)
+                H[i]=(dLdg1-dLdg0) / dg
+
+            pylab.figure("Full Hessian")
+            pylab.clf()
+            pylab.imshow(np.log10(np.abs(H)),interpolation="nearest")
+            pylab.draw()
+            pylab.show(False)
+            pylab.pause(0.1)
+
+            if self.MAP and MAP:
+                H+=self.CSW.d2logPdx2_Full(g0)
+                
+        return H
+    
     # ################################################
         
     def logprob(self,g):
@@ -223,7 +265,7 @@ class ClassLikelihoodMachine():
         self.gCurrentL=g0.copy()
         return L
 
-    def dLdg(self,g0,Slice=None):
+    def dLdg(self,g0,Slice=None,MAP=True):
 
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
@@ -296,8 +338,8 @@ class ClassLikelihoodMachine():
                 
             ii+=ThisNParms
 
-        #J.fill(0)
-        if self.MAP:
+
+        if self.MAP and MAP:
             #J+=self.CSWFull.dlogPdx(g.flatten())
             
             J[Sl]+=self.CSW.dlogPdx(g.flatten())[Sl]
@@ -310,9 +352,8 @@ class ClassLikelihoodMachine():
         return J
 
 
-        
-                
-    def dJdg(self,g0):
+
+    def d2Pdg2(self,g0):
 
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
@@ -376,59 +417,10 @@ class ClassLikelihoodMachine():
             
             ii+=ThisNParms
 
-        #J.fill(0)
-        if self.MAP:
-            J[:]+=self.CSW.d2logPdx2(g.flatten())
-            
-        # k=g0.size
-        # gTg=np.sum(g0**2)+1e-10
-        # #J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
-        #     #J[:]+=self.CAD.d2logPdx2(g.flatten())
-        # # if self.MAP:
-        # #     J[:]+= -1 + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
-        # #     #J[:]+= -1 # + 2*(k/2-1)*(1./gTg-2*g.flat[:]**2/(gTg)**2)
         
         return J
 
     def recenterNorm(self,X):
         return X
         return self.CSW.recenterNorm(X)
-        # GM=self.MassFunction.GammaMachine
-        # L_NParms=GM.L_NParms
-        # ii=0
-        # for iSlice in range(self.NSlice):
-        #     ThisNParms=L_NParms[iSlice]
-        #     iPar=ii
-        #     jPar=iPar+ThisNParms
-        #     X[iPar:jPar]=(X[iPar:jPar]-np.mean(X[iPar:jPar]))/np.std(X[iPar:jPar])
-        #     ii+=ThisNParms
-        # return X
         
-    def buildFulldJdg(self,g,ParmId=None):
-
-        
-        dJdg=np.zeros((g.size,g.size),np.float64)
-
-        dg=1e-3
-        dLdg0=self.dLdg(g)
-
-        if ParmId is None:
-            ParmId=np.arange(g.size)
-        
-        for i in ParmId:
-            print("%i/%i"%(i,ParmId.size))
-            g1=g.copy()
-            g1[i]+=dg
-            dLdg1=self.dLdg(g1)
-            dJdg[i]=(dLdg1-dLdg0) / dg
-
-
-        H=np.abs(dJdg)
-        H[H==0]=(H[H!=0]).min()
-        pylab.figure("Full Hessian")
-        pylab.clf()
-        pylab.imshow(np.log10(H),interpolation="nearest")
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
-        return dJdg

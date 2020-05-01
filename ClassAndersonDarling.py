@@ -39,7 +39,10 @@ def logTwoSlopes(x,pars):
     a0,b0,a1,b1,s0,s1=pars
     y0=a0*x+b0
     y1=a1*x+b1
-    S=Sigmoid(x-s0,a=s1)
+    s=np.max([s1,0.1])
+    s=np.min([s,10.])
+    
+    S=Sigmoid(x-s0,a=s)
     return y0*(1-S)+y1*S
 
 def Gaussian1D(x):
@@ -128,12 +131,13 @@ class ClassAndersonDarlingMachine():
         Pfit=self.logP_A2
         
         fig=pylab.figure("logP-A2")
+        fig.clf()
         # pylab.subplot(2,2,1)
         # pylab.plot(Fm.x,Fm.y)
         # pylab.xlim(0,100)
         # pylab.subplot(2,2,2)
-        pylab.scatter(Pm.x,np.log(Pm.y))#,edgecolors="black")
-        pylab.plot(Pm.x,Pfit(Pm.x))
+        pylab.scatter(Pm.x,np.log(Pm.y),color="black",alpha=0.5)#,edgecolors="black")
+        pylab.plot(Pm.x,Pfit(Pm.x),color="black",ls="--")
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)

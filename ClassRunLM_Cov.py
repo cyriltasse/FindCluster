@@ -57,8 +57,8 @@ def test(DoPlot=False,ComputeInitCube=False):
                              ComputeInitCube=ComputeInitCube)
 
     
-    LMMachine.testJacob()
-    return
+    # LMMachine.testJacob()
+    # return
     
     g=LMMachine.runLM()
     np.save("gEst.npy",g)
@@ -136,9 +136,9 @@ class ClassRunLM_Cov():
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
 
-        # ###########################
-        # self.finaliseInit()
-        # ###########################
+        ###########################
+        self.finaliseInit()
+        ###########################
 
         self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
 
