@@ -1,21 +1,8 @@
-# import scipy.special
-# import numpy as np
-# import pylab
-# import scipy.stats
-# import GeneDist
-# import scipy.optimize
-# from ModIrregular import *
-# from scipy.special import gamma
-# from scipy.special import loggamma
 
-# erf=scipy.special.erf
-# G=scipy.special.gamma
-# logG=scipy.special.loggamma
-# Phi=lambda x: 0.5*(1+erf(x/np.sqrt(2)))
-# def Sigmoid(x,a=1):
-#     return 1./(1+np.exp(-x/a))
+
 
 from ClassAndersonDarling import *
+import ClassEigenShapiroWilk
 
 # # ##############################
 # # Catch numpy warning
@@ -41,180 +28,127 @@ def testDist():
         print("doing n=%i"%n)
         CAD=ClassAndersonDarlingMachine()
         CAD.Init(n,NTry=3000)
-import ModIrregular
-def testDiffTerm():
-    X=np.random.randn(20)+0.3#*2+1
-    CAD=ClassAndersonDarlingMachine()
-    CAD.Init(X.size,NTry=1000)
 
-    def D(x):
-        F_X=ModIrregular.giveIrregularCumulDist(x)
-        Diff=(CAD.w*(F_X-CAD.f_Phi)**2)#.int()
-        Diff=(F_X)
-        #Diff=(F_X)
-        return Diff
 
-    pylab.close("all")
-    fig=pylab.figure("Diff Term")
-    dx=1e-3
-    Diff0=D(X)
-    for iParm in range(X.size):
-        Xix=X.copy()
-        Xix[iParm]+=dx
-        Diff=D(Xix)
-        dDiff=Diff-Diff0
-        #pylab.plot(dDiff.x,X.size*dDiff.y/dx)
-        pylab.plot(dDiff.x,dDiff.y/dx,marker=".")
-        pylab.draw()
-        pylab.show(False)
-        pylab.pause(0.1)
-        return
-        
+
 import ClassEigenShapiroWilk
 
 def testJacob():
     np.random.seed(43)
     X0=np.random.randn(20)+0.3#*2+1
+    S=np.load("gTestJacob.npz")
+    X0=S["g"]
+    Ln=S["Ln"]
     X=X0.copy()
-
-    CAD=ClassAndersonDarlingMachine()
-    CAD.Init(X.size,NTry=1000)
-    #CAD=ClassEigenShapiroWilk.ClassEigenShapiroWilk()
-
-    fig=pylab.figure("Jacob")
-    J2a=CAD.meas_dA2_dx(X)
-    #J2b,J2b1=CAD.give_dA2_dx(X)
-    J2b=CAD.dA2_dx(X)
-
-    pylab.close("all")
-
-    # ########################################
-    # ##################### A2 ###############
-    fig=pylab.figure("Jacob A2")
-    pylab.clf()
-    ax=pylab.subplot(2,2,1)
-    pylab.scatter(X,J2a)
-    pylab.title("Meas")
-    pylab.subplot(2,2,2)
-    pylab.scatter(X,J2b)
-    pylab.title("Calc")
-    pylab.subplot(2,2,3)
-    pylab.scatter(X,J2a,c="black")
-    pylab.scatter(X,J2b,c="blue")
-    #pylab.scatter(X,J2b1,c="green")
-    pylab.subplot(2,2,4)
-    pylab.scatter(X,J2a/J2b)
-    pylab.draw()
-    pylab.show(block=False)
-    pylab.pause(0.1)
-
-    #Ha=H_Diag_Meas=CAD.meas_d2A2_dx2(X)
-    H_Meas_Full=CAD.meas_d2A2_dx2_full(X)
-    Ha=H_Meas_Full_Diag=np.diag(H_Meas_Full)
     
-    Hb0=CAD.d2A2_dx2(X,Diag=True)
-    H_Calc_Full=CAD.d2A2_dx2(X,Diag=False)
-    Hb1=H_Calc_Full_Diag=np.diag(H_Calc_Full)
+    CAD=ClassEigenShapiroWilk.ClassEigenShapiroWilk(Ln)
+    #CAD.Init(X.size,NTry=1000)
+
+    # fig=pylab.figure("Jacob")
+    # J2a=CAD.meas_dA2_dx(X)
+    # #J2b,J2b1=CAD.give_dA2_dx(X)
+    # J2b=CAD.dA2_dx(X)
+
+    # pylab.close("all")
+
+    # # ########################################
+    # # ##################### A2 ###############
+    # fig=pylab.figure("Jacob A2")
+    # pylab.clf()
+    # ax=pylab.subplot(2,2,1)
+    # pylab.scatter(X,J2a)
+    # pylab.title("Meas")
+    # pylab.subplot(2,2,2)
+    # pylab.scatter(X,J2b)
+    # pylab.title("Calc")
+    # pylab.subplot(2,2,3)
+    # pylab.scatter(X,J2a,c="black")
+    # pylab.scatter(X,J2b,c="blue")
+    # #pylab.scatter(X,J2b1,c="green")
+    # pylab.subplot(2,2,4)
+    # pylab.scatter(X,J2a/J2b)
+    # pylab.draw()
+    # pylab.show(block=False)
+    # pylab.pause(0.1)
+
+
+    # Ha=CAD.meas_d2A2_dx2(X)
+    # print(Ha)
+    # Hb=CAD.d2A2_dx2(X)
+
+    # fig=pylab.figure("Hessian A2")
+    # pylab.clf()
+
+    # ax0=pylab.subplot(2,2,1)
+    # ax0.scatter(X,np.abs(Ha))
+    # ax0.set_yscale("log")
+    # ax0.set_title("Meas")
+
+    # ax1=pylab.subplot(2,2,2,sharex=ax0,sharey=ax0)
+    # ax1.scatter(X,np.abs(Hb))
+    # ax1.set_yscale("log")
+    # ax1.set_title("Calc")
+
+    # ax2=pylab.subplot(2,2,3,sharex=ax0,sharey=ax0)
+    # ax2.scatter(X,np.abs(Ha),c="black")
+    # ax2.scatter(X,np.abs(Hb),c="blue")
+    # ax2.set_yscale("log")
+    # ax3=pylab.subplot(2,2,4,sharex=ax0)
+    # ax3.scatter(X,np.abs(Ha)/np.abs(Hb),c="black")
+    # pylab.draw()
+    # pylab.show(block=False)
+    # pylab.pause(0.1)
+
     
-    fig=pylab.figure("Hessian A2")
-    pylab.clf()
-
-    ax0=pylab.subplot(2,2,1)
-    ax0.scatter(X,np.abs(Ha))
-    ax0.set_yscale("log")
-    ax0.set_title("Meas")
-
-    ax1=pylab.subplot(2,2,2,sharex=ax0,sharey=ax0)
-    ax1.scatter(X,np.abs(Hb0))
-    ax1.set_yscale("log")
-    ax1.set_title("Calc")
-
-    ax2=pylab.subplot(2,2,3,sharex=ax0,sharey=ax0)
-    ax2.scatter(X,np.abs(Ha),c="blue")
-    ax2.scatter(X,np.abs(Hb0),c="black")
-    ax2.scatter(X,np.abs(Hb1),c="gray")
-    ax2.set_yscale("log")
-    ax3=pylab.subplot(2,2,4,sharex=ax0)
-    ax3.scatter(X,(Ha)/(Hb0),c="black")
-    ax3.scatter(X,(Ha)/(Hb1),c="gray")
-    pylab.draw()
-    pylab.show(block=False)
-    pylab.pause(0.1)
-
-    fig=pylab.figure("HessianA2 Full")
-    fig.clf()
-    pylab.subplot(1,2,1)
-    pylab.imshow(np.log10(np.abs(H_Calc_Full)),interpolation="nearest")
-    pylab.subplot(1,2,2)
-    pylab.imshow(np.log10(np.abs(H_Meas_Full)),interpolation="nearest")
-    pylab.draw()
-    pylab.show(block=False)
-    pylab.pause(0.1)
-
     # ########################################
     # ##################### logP #############
-    
-    Ha=CAD.meas_dlogP_dx(X)
-    Hb=CAD.dlogPdx(X)
+
+    ParmId=np.int64(np.random.rand(10)*X.size)
+    Ha=CAD.meas_dlogP_dx(X,ParmId=ParmId)
+    Hb=CAD.dlogPdx(X)[ParmId]
     
     fig=pylab.figure("Jacob logP")
     pylab.clf()
     ax0=pylab.subplot(2,2,1)
-    ax0.scatter(X,np.abs(Ha))
+    ax0.scatter(X[ParmId],np.abs(Ha))
     #ax0.set_yscale("log")
     ax0.set_title("Meas")
     ax1=pylab.subplot(2,2,2,sharex=ax0,sharey=ax0)
-    ax1.scatter(X,np.abs(Hb))
+    ax1.scatter(X[ParmId],np.abs(Hb))
     ax1.set_yscale("log")
     ax1.set_title("Calc")
     ax2=pylab.subplot(2,2,3,sharex=ax0,sharey=ax0)
-    ax2.scatter(X,np.abs(Ha),c="black")
-    ax2.scatter(X,np.abs(Hb),c="blue")
+    ax2.scatter(X[ParmId],np.abs(Ha),c="black")
+    ax2.scatter(X[ParmId],np.abs(Hb),c="blue")
     ax2.set_yscale("log")
     ax3=pylab.subplot(2,2,4,sharex=ax0)
-    ax3.scatter(X,(Ha)/(Hb),c="black")
+    ax3.scatter(X[ParmId],(Ha)/(Hb),c="black")
     pylab.draw()
     pylab.show(block=False)
     pylab.pause(0.1)
 
-    Ha=CAD.meas_d2logP_dx2(X)
-    Hb0=CAD.d2logPdx2(X)
-    Hbb=CAD.d2logPdx2_full(X)
-    Hb1=np.diag(Hbb)
-    
+    Ha=CAD.meas_d2logP_dx2(X,ParmId=ParmId)
+    Hb=CAD.d2logPdx2(X)[ParmId]
     fig=pylab.figure("Hessian logP")
     pylab.clf()
     ax0=pylab.subplot(2,2,1)
-    ax0.scatter(X,np.abs(Ha))
+    ax0.scatter(X[ParmId],np.abs(Ha))
     #ax0.set_yscale("log")
     ax0.set_title("Meas")
     ax1=pylab.subplot(2,2,2,sharex=ax0,sharey=ax0)
-    ax1.scatter(X,np.abs(Hb))
+    ax1.scatter(X[ParmId],np.abs(Hb))
     ax1.set_yscale("log")
     ax1.set_title("Calc")
     ax2=pylab.subplot(2,2,3,sharex=ax0,sharey=ax0)
-    ax2.scatter(X,np.abs(Ha),c="blue")
-    ax2.scatter(X,np.abs(Hb0),c="black")
-    ax2.scatter(X,np.abs(Hb1),c="gray")
+    ax2.scatter(X[ParmId],np.abs(Ha),c="black")
+    ax2.scatter(X[ParmId],np.abs(Hb),c="blue")
     ax2.set_yscale("log")
     ax3=pylab.subplot(2,2,4,sharex=ax0)
-    ax3.scatter(X,(Ha)/(Hb0),c="black")
-    ax3.scatter(X,(Ha)/(Hb1),c="gray")
+    ax3.scatter(X[ParmId],(Ha)/(Hb),c="black")
     pylab.draw()
     pylab.show(block=False)
     pylab.pause(0.1)
 
-
-    H_Meas_Full=CAD.meas_d2logP_dx2_full(X)
-    fig=pylab.figure("Hessian Full")
-    fig.clf()
-    pylab.subplot(1,2,1)
-    pylab.imshow(np.log10(np.abs(Hbb)),interpolation="nearest")
-    pylab.subplot(1,2,2)
-    pylab.imshow(np.log10(np.abs(H_Meas_Full)),interpolation="nearest")
-    pylab.draw()
-    pylab.show(block=False)
-    pylab.pause(0.1)
 
     
 def testMin():

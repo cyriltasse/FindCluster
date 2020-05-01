@@ -73,7 +73,7 @@ def Fit_logPA2(x,y,GaussPars=(0,1),func=None):
 
 class ClassAndersonDarlingMachine():
     def __init__(self,Scale="linear"):
-        x=np.linspace(-7,7,1001)
+        x=np.linspace(-10,10,1001)
         f_Phi=ClassF(x,Phi(x))
         f_Phi1=ClassF(x,1-Phi(x))
         self.f_Gauss1D=ClassF(x,Gaussian1D(x))
@@ -93,7 +93,7 @@ class ClassAndersonDarlingMachine():
         self.f_Phi=f_Phi
         self.r=r
         self.w=r.inv()
-        #self.w=(self.w*self.f_Gauss1D)
+        self.w=(self.w*self.f_Gauss1D)
         self.dwdx=self.w.diff()
         self.logP=None
         # A2=np.linspace(0,5,10000)
@@ -101,7 +101,7 @@ class ClassAndersonDarlingMachine():
         # dx=0.01
         # self.dlogPdA2=self.logP.diff()
 
-    def generatePA2(self,n,NTry=10000):
+    def Init(self,n,NTry=10000):
         L_y=[]
         log.print("Number of generated %i-size samples: %i"%(n,NTry))
         for iTry in range(NTry):
@@ -149,8 +149,58 @@ class ClassAndersonDarlingMachine():
         A2=n*((F_X-f_Phi)**2 * self.w).int()
         #A2=n*((F_X-f_Phi)**2).int()
         return A2
+    
+    def dA2_dx(self,xi):
 
+        nk=xi.size
+        wk=1.
+        Fn_k=giveIrregularCumulDist(xi)
+        F_k=self.f_Phi
+        dA2_dxi=np.zeros((nk,),np.float32)
+        dA2_dxi1=np.zeros((nk,),np.float32)
+        dDirac=0.001
+        Diff=(Fn_k-F_k)
         
+        #dA2_dxi= -2 *self.w(xi)* self.f_Gauss1D(xi) * (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
+        dA2_dxi= - 2*self.w(xi) * (Diff(xi+1e-5)+Diff(xi-1e-5))/2.
+        
+        #dA2_dxi= -2* (Diff(xi+1e-5)+Diff(xi-1e-5))/2.
+        
+        
+        
+
+        return dA2_dxi
+
+    def d2A2_dx2(self,xi,Diag=True):
+
+        nk=xi.size
+        wk=1.
+        Fn_k=giveIrregularCumulDist(xi)
+        F_k=self.f_Phi
+        dA2_dxi=np.zeros((nk,),np.float32)
+        dA2_dxi1=np.zeros((nk,),np.float32)
+        dDirac=0.001
+        Diff=(Fn_k-F_k)
+
+        dA2_dxi= -2 *self.dwdx(xi)#* (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
+        dA2_dxi= 2*(-self.dwdx(xi)*(Diff(xi+1e-5)+Diff(xi-1e-5))/2.+self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+
+        if not Diag:
+            dA2_dxi=np.diag(dA2_dxi)
+        #dA2_dxi= -2*(self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+        #dA2_dxi= -2*(self.dwdx(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+        # else:
+        #     a,b=self.dwdx(xi),(Diff(xi+1e-5)+Diff(xi-1e-5))/2.
+        #     c,d=self.w(xi),self.f_Phi.diff()(xi)
+        #     dA2_dxi= 2*( - a.reshape((-1,1))*b.reshape((1,-1)) + c.reshape((-1,1))*d.reshape((1,-1)) )#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+            
+        return dA2_dxi
+
+
+    # #########################
+    # Hessian
+
+
     def logP_x(self,X):
         if self.logP_A2 is None:
             self.generatePA2(X.size)
@@ -183,72 +233,23 @@ class ClassAndersonDarlingMachine():
         C=self.dlogPdA2(A2)
         D=self.d2A2_dx2(X)
         return A*B**2+C*D
-    
-    
 
-    
+    def d2logPdx2_full(self,X):
+        A2=self.giveA2(X)
+        A=self.d2logPdA2(A2)
+        B=self.dA2_dx(X)
+        B0=B.reshape((-1,1))
+        B1=B.reshape((1,-1))
+        C=self.dlogPdA2(A2)
+        D=self.d2A2_dx2(X,Diag=False)
+        return A*B0*B1+C*D
 
-    # #########################
-    # Jacob
-    
-    def dA2_dx(self,xi):
 
-        nk=xi.size
-        wk=1.
-        Fn_k=giveIrregularCumulDist(xi)
-        F_k=self.f_Phi
-        dA2_dxi=np.zeros((nk,),np.float32)
-        dA2_dxi1=np.zeros((nk,),np.float32)
-        dDirac=0.001
-        Diff=(Fn_k-F_k)
-        
-        #dA2_dxi= -2 *self.w(xi)* self.f_Gauss1D(xi) * (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
-        dA2_dxi= -2 *self.w(xi) * (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
-        #dA2_dxi= -2* (Diff(xi+1e-5)+Diff(xi-1e-5))/2.
-
-        return dA2_dxi
-
-    def meas_dA2_dx(self,X):
-        LJ=[]
-        for iParm in range(X.size):
-            dx=np.linspace(-.0001,.0001,2)
-            logL=[]
-            Lx=[]
-            for ix in range(dx.size):
-                Xix=X.copy()
-                Xix[iParm]+=dx[ix]
-                logL.append(self.giveA2(Xix))
-                Lx.append(Xix[iParm])
-            J=(logL[1]-logL[0])/(dx[1]-dx[0])
-            LJ.append(J)
-        
-        return np.array(LJ)
-
-    # #########################
-    # Hessian
-
-    def d2A2_dx2(self,xi):
-
-        nk=xi.size
-        wk=1.
-        Fn_k=giveIrregularCumulDist(xi)
-        F_k=self.f_Phi
-        dA2_dxi=np.zeros((nk,),np.float32)
-        dA2_dxi1=np.zeros((nk,),np.float32)
-        dDirac=0.001
-        Diff=(Fn_k-F_k)
-        
-        dA2_dxi= -2 *self.dwdx(xi)#* (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
-        dA2_dxi= -2*(-self.dwdx(xi)*(Diff(xi+1e-3)+Diff(xi-1e-3))/2.+self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
-        #dA2_dxi= -2*(self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
-        #dA2_dxi= -2*(self.dwdx(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
-
-        return dA2_dxi
     
     def meas_d2A2_dx2(self,X):
         LH=[]
         for iParm in range(X.size):
-            dx=np.linspace(-.001,.001,2)
+            dx=np.linspace(-.0001,.0001,2)
             LJ=[]
             for ix in range(dx.size):
                 Xix=X.copy()
@@ -258,11 +259,38 @@ class ClassAndersonDarlingMachine():
             LH.append(H)
         
         return np.array(LH)
-    
 
-    def meas_dlogP_dx(self,X):
-        LH=[]
+    def meas_d2A2_dx2_full(self,X):
+        H=np.zeros((X.size,X.size),np.float64)
+        J0=self.dA2_dx(X)
         for iParm in range(X.size):
+            dx=2e-4
+            Xix=X.copy()
+            Xix[iParm]+=dx
+            J=self.dA2_dx(Xix)
+            H[iParm]=(J-J0)/(dx)
+        
+        return H
+    
+    def meas_dA2_dx(self,X):
+        J=np.zeros((X.size,),np.float64)
+        A0=self.giveA2(X)
+        for iParm in range(X.size):
+            dx=1e-3
+            Xix=X.copy()
+            Xix[iParm]+=dx
+            A1=self.giveA2(Xix)
+            J[iParm]=(A1-A0)/dx
+        
+        return J
+
+    
+    def meas_dlogP_dx(self,X,ParmId=None):
+        if ParmId is None:
+            ParmId=np.arange(X.size)
+            
+        LH=[]
+        for iParm in ParmId:
             dx=np.linspace(-.001,.001,2)
             LJ=[]
             for ix in range(dx.size):
@@ -274,10 +302,12 @@ class ClassAndersonDarlingMachine():
 
         return np.array(LH)
 
-    def meas_d2logP_dx2(self,X):
+    def meas_d2logP_dx2(self,X,ParmId=None):
+        if ParmId is None:
+            ParmId=np.arange(X.size)
         LH=[]
-        for iParm in range(X.size):
-            dx=np.linspace(-.01,.01,2)
+        for iParm in ParmId:
+            dx=np.linspace(-.00001,.00001,2)
             LJ=[]
             for ix in range(dx.size):
                 Xix=X.copy()
@@ -287,6 +317,23 @@ class ClassAndersonDarlingMachine():
             LH.append(H)
         
         return np.array(LH)
+    
+    
+
+    def meas_d2logP_dx2_full(self,X,ParmId=None):
+        if ParmId is None:
+            ParmId=np.arange(X.size)
+            
+        H=np.zeros((X.size,X.size),np.float32)
+        dx=0.001
+        J0=self.dlogPdx(X)
+        for iParm in ParmId:
+            Xix=X.copy()
+            Xix[iParm]+=dx
+            J=self.dlogPdx(Xix)
+            H[iParm]=(J-J0)/(dx)
+        
+        return H
     
     
 

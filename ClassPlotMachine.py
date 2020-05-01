@@ -27,6 +27,16 @@ def GiveNXNYPanels(Ns,ratio=800/500):
     if nx*ny<Ns: ny+=1
     return nx,ny
 
+import scipy.special
+erf=scipy.special.erf
+G=scipy.special.gamma
+logG=scipy.special.loggamma
+def Phi(x,mu=0.,sig=1.):
+    return 0.5*(1+erf((x-mu)/(sig*np.sqrt(2))))
+def Sigmoid(x,a=1):
+    return 1./(1+np.exp(-x/a))
+mdot=np.linalg.multi_dot
+
 from ClassShapiroWilk import *
 
 class ClassPlotMachine():
@@ -47,41 +57,98 @@ class ClassPlotMachine():
         self.StepPlot=StepPlot
         os.system("rm *.png")
         
-    def Plot(self,g,Force=False):
+    def Plot(self,g,NTry=100,Force=False,FullHessian=False):
         if (self.iCall%self.StepPlot==0) or Force:
             log.print("Call %i... plotting"%self.iCall)
-            self.PlotHist(g)
+            self.PlotHist(g,NTry=NTry,FullHessian=FullHessian)
+            self.PlotHistEigen(g)
+            self.PlotLogDiff(g)
             self.iFig+=1
         self.iCall+=1
 
-    def PlotHist(self,g,NTry=100):
+    def PlotLogDiff(self,g):
+        CubeBest=self.GM.giveGammaCube(g)
+        fig=pylab.figure("logDiff")
+        cmap=pylab.cm.cubehelix
+        
+        Lc=cmap(np.linspace(0.1,0.9,self.GM.NSlice))
+        ax=pylab.subplot(1,1,1)
+        ax.cla()
+        # for iSlice in range(self.GM.NSlice):
+        #     n=self.CLM.CM.DicoDATA["DicoSelFunc"]["n_z"][iSlice]
+        #     y=CubeBest[iSlice].flatten()*n
+        #     ys=self.CubeSimul[iSlice].flatten()*n
+        #     ax.scatter(np.log10(ys),np.log10(y/ys),
+        #                   s=5,
+        #                   color=Lc[iSlice],
+        #                   alpha=0.1,
+        #                   linewidth=0)
+
+        n=self.CLM.CM.DicoDATA["DicoSelFunc"]["n_z"].reshape((-1,1,1))
+        y=(CubeBest*n).flatten()
+        ys=(self.CubeSimul*n).flatten()
+        x,y=np.log10(ys),np.log10(y/ys)
+        ax.hexbin(x,y, gridsize=50, cmap='inferno',extent=(x.min()-0.1,x.max()+0.1,-2,2))
+        # pylab.xlim(-1.5,1.5)
+        # pylab.ylim(-2,2)
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.1)
+        self.SaveFig()
+    
+    def PlotHist(self,g,NTry=100,gArray=None,FullHessian=False):
         GM=self.GM
         L_NParms=GM.L_NParms
-        dJdg=self.CLM.dJdg(g).flat[:]
+
         L=self.CLM.L(g)
         #self.L_L.append(L)
         LTrue=self.LTrue
         L_L=self.L_L
         
         C=GeneDist.ClassDistMachine()
+
         
         
         #Sig[Sig>1.]=1
         # Sig=(1./np.abs(dJdg))
-        
-        Sig=np.sqrt(1./np.abs(dJdg))
-        
+        if gArray is not None:
+            NTry=gArray.shape[0]
+        elif not FullHessian:
+            dJdg=self.CLM.dJdg(g).flat[:]
+            Sig=np.sqrt(1./np.abs(dJdg))#/2.
+            gArray=np.array([g+Sig*np.random.randn(*g.shape) for iTry in range(NTry)])
+        elif FullHessian:
+            log.print("  building Hessian...")
+            dJdG=self.CLM.buildFulldJdg(g)
+            dJdG=(dJdG+dJdG.T)/2.
+            # idJdG=ModLinAlg.invSVD(dJdg)
+            log.print("  doing SVD...")
+            dJdG=np.diag(np.diag(dJdG))
+            Us,ss,Vs=np.linalg.svd(dJdG)
+
+            sss=ss[ss>0]
+            log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
+            ssqs=1./np.sqrt(ss)
+            ind=np.where(ssqs>1e-2*ssqs.max())[0]
+            Us=Us[:,ind]
+            ssqs=ssqs.flat[ind]
+            sqrtCs =Us*ssqs.reshape(1,ssqs.size)
+            
+            log.print("  creating random set...")
+            gArray=np.array([ (g.flatten()+np.dot(sqrtCs,np.random.randn(ssqs.size,1)).flatten()) for iTry in range(NTry)])
+            
         GammaStat=np.zeros((NTry,self.GM.NSlice,self.GM.NPix,self.GM.NPix),np.float32)
         for iTry in range(NTry):
-            GammaStat[iTry]=(self.GM.giveGammaCube(g+Sig*np.random.randn(*g.shape)))
+            GammaStat[iTry]=(self.GM.giveGammaCube(gArray[iTry]))
 
         GammaStat[GammaStat<1e-10]=1e-10
-        
+        CubeBest=self.GM.giveGammaCube(g)
         CubeSimul=self.CubeSimul
         Scale="log"
         if Scale=="log":
             GammaStat=np.log10(GammaStat)
             CubeSimul=np.log10(CubeSimul)
+            CubeBest=np.log10(CubeBest)
         Cube_mean=np.mean(GammaStat,axis=0)
             
         ys=CubeSimul.flatten()
@@ -161,10 +228,10 @@ class ClassPlotMachine():
         # eCube=ycCube/((y1Cube-y0Cube)/2.)
         # #self.GM.PlotGammaCube(Cube=eCube,FigName="eCube")
         # self.GM.PlotGammaCube(Cube=(MeanCube-self.CubeSimul)/eCube,FigName="eCube",vmm=(-3,3))
-        # self.GM.PlotGammaCube(Cube=np.log(MeanCube),FigName="log(MeanCube)")
         # self.GM.PlotCumulDistX(g)
 
-
+        self.GM.PlotGammaCube(Cube=CubeBest,FigName="Best LogCube")
+        self.SaveFig()
         fact=1.8/2.
         figsize=(13/fact,8/fact)
         Nx,Ny=GiveNXNYPanels(self.GM.NSlice,ratio=figsize[0]/figsize[1])
@@ -189,7 +256,7 @@ class ClassPlotMachine():
         for iPlot in range(self.GM.NSlice):
             iSlice=iPlot
             ax0=fig.add_subplot(Nx,Ny,iPlot+1)
-            ax0.imshow(Cube_mean[iSlice]-CubeSimul[iSlice],
+            ax0.imshow(CubeBest[iSlice]-CubeSimul[iSlice],
                        interpolation="nearest",
                        aspect="auto",
                        #extent=(-5,5,0,1),
@@ -230,12 +297,11 @@ class ClassPlotMachine():
             pylab.xlim(vmin,vmax)
             pylab.ylim(0,1)
         pylab.draw()
-        mng = pylab.get_current_fig_manager()
-        #mng.frame.Maximize(True)
+        #mng = pylab.get_current_fig_manager()
         #mng.resize(*mng.window.maxsize())
         pylab.show(block=False)
         pylab.pause(0.01)
-        fig.savefig("DiffSimSlice%4.4i.png"%self.iFig)
+        self.SaveFig(fig)
 
         
         
@@ -262,6 +328,53 @@ class ClassPlotMachine():
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.01)
+
+
+    def PlotHistEigen(self,X,FigName="Hist Eigen"):
+
+        fact=1.8
+        figsize=(13/fact,8/fact)
+        fig=pylab.figure(FigName,figsize=figsize)
+        fig.clf()
+        Nx,Ny=GiveNXNYPanels(self.GM.NSlice,ratio=figsize[0]/figsize[1])
+        fig.clf()
+        ii=0
+        
+        for iPlot in range(self.GM.NSlice):
+            iSlice=iPlot
+            N=self.GM.L_NParms[iSlice]
+            x=X[ii:ii+self.GM.L_NParms[iSlice]].flatten()
+            ii+=N
+
+            NBin=x.size//20
+            NBin=np.max([2,NBin])
+            BinX=np.int32(np.linspace(0,x.size+1,NBin))
+            ax=pylab.subplot(Nx,Ny,iPlot+1)
+            cmap=pylab.cm.cubehelix
+            Lc=cmap(np.linspace(0.1,0.9,NBin))[::-1]
             
+            for iBin in range(BinX.size-1):
+                i0,i1=BinX[iBin],BinX[iBin+1]
+                xx=x[i0:i1]
+
+                C=GeneDist.ClassDistMachine()
+                x0,y0=C.giveCumulDist(xx,Ns=1000,Norm=True)
+                pylab.plot(x0,y0,color=Lc[iBin])
+
+            xx=np.linspace(-5,5,1000)
+            pylab.plot(xx,Phi(xx),color="black",ls="--")
+#            pylab.xlim((-5,5))
+        pylab.draw()
+        pylab.show(block=False)
+        pylab.pause(0.01)
+
 
         
+    def SaveFig(self,fig=None):
+        if fig is None:
+            fig=pylab.gcf()
+        fname=fig.get_label().replace(" ","_")
+        oname="%s_%4.4i.png"%(fname,self.iFig)
+
+        log.print(ModColor.Str("Saving fig %s as %s"%(fname,oname),col="blue"))
+        fig.savefig(oname)

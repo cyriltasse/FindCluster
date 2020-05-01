@@ -46,7 +46,6 @@ def test(DoPlot=False,ComputeInitCube=False):
     rac_deg,decc_deg=241.20678,55.59485 # cluster
     FOV=0.15
     FOV=0.05
-    FOV=0.10
 #    FOV=0.02
 
     SubField={"rac_deg":rac_deg,
@@ -56,9 +55,14 @@ def test(DoPlot=False,ComputeInitCube=False):
     LMMachine=ClassRunLM_Cov(SubField,
                              DoPlot=DoPlot,
                              ComputeInitCube=ComputeInitCube)
+
+    
+    LMMachine.testJacob()
+    return
     
     g=LMMachine.runLM()
     np.save("gEst.npy",g)
+    LMMachine.PM.Plot(g,FullHessian=True,Force=True)
     return
     g=np.load("gEst.npy")
     #    LMMachine.runMCMC(g)#LMMachine.XSimul.ravel())
@@ -95,8 +99,8 @@ class ClassRunLM_Cov():
         self.NPix=int(self.FOV/self.CellDeg)
         if (self.NPix%2)!=0:
             self.NPix+=1
-
-        #self.NPix=5
+        
+        self.NPix=11
         log.print("Choosing NPix=%i"%self.NPix)
 
         self.CM=ClassCatalogMachine.ClassCatalogMachine()
@@ -192,6 +196,7 @@ class ClassRunLM_Cov():
     def simulCat(self):
         log.print("Simulating catalog...")
         self.X=np.random.randn(self.GM.NParms)
+        #self.X=self.CLM.recenterNorm(self.X)
         # # self.X.fill(0.)
         
         # GammaCube=np.zeros((self.NSlice,self.NPix,self.NPix),np.float64)+5.
@@ -206,9 +211,10 @@ class ClassRunLM_Cov():
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
 
         
-        # # print(":!::")
+        #  # # print(":!::")
         # n_z.fill(1./self.CellRad**2)
         # n_z*=0.5
+        n_z*=10.
         
         # pylab.clf()
         # pylab.plot(n_z)
@@ -227,11 +233,12 @@ class ClassRunLM_Cov():
             ThisNzt=np.zeros((self.NSlice,),np.float32)
             sig=0.05
             z=self.GM.zmg
-            p=1./(sig*np.sqrt(2.*np.pi)) * np.exp(-(z-z[iSlice])**2/(2.*sig**2))
+            p=1./(sig*np.sqrt(2.*np.pi)) * np.exp(-np.float128((z-z[iSlice])**2/(2.*sig**2)))
             p/=np.sum(p)
+            # p=np.float64(p)
             # p.fill(0)            
             # p[iSlice]=1
-            # #print(p)
+            #print(p)
             ThisNzt[:]=p[:]
             ThisX=[]
             ThisY=[]
@@ -291,14 +298,21 @@ class ClassRunLM_Cov():
         n_zt=np.array(n_zt)
         s=self.CM.Cat_s.n_zt[:]*self.CellRad**2*5
         self.DicoSourceXY=DicoSourceXY
+        xx=X+np.random.rand(X.size)-0.5
+        yy=Y+np.random.rand(X.size)-0.5
         for iSlice in range(self.GM.NSlice):
-            ax=GM.AxList[iSlice].scatter(X,Y,c="red",s=s[:,iSlice],linewidth=0)
+            ax=GM.AxList[iSlice].scatter(xx,yy,c="red",s=s[:,iSlice],linewidth=0)
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
 
         #self.GM.PlotGammaCube(Cube=self.NCube,FigName="NCube")
 
+    def testJacob(self):
+        g=np.random.randn(self.GM.NParms)
+        np.savez("gTestJacob.npz",g=g,Ln=self.GM.L_NParms)
+        self.CLM.measure_dLdg(g)
+        self.CLM.measure_dJdg(g)
         
     def runLM(self,NMaxSteps=3000):
         T=ClassTimeIt.ClassTimeIt()
@@ -317,7 +331,7 @@ class ClassRunLM_Cov():
                                              XSimul=self.XSimul,
                                              DicoSourceXY=self.DicoSourceXY,
                                              StepPlot=100)
-
+        self.PM=PM
         # g.fill(0)
         # log.print("True Likelihood = %.5f"%(self.CLM.L(g)))
         iStep=0
@@ -338,8 +352,8 @@ class ClassRunLM_Cov():
             return L
         C=GeneDist.ClassDistMachine()
         #g.fill(0)
-        g.flat[:]=np.random.randn(g.size)*0.1
-        g.flat[:]=np.random.rand(g.size)*0.1
+        #g.flat[:]=np.random.randn(g.size)*0.1
+        #g.flat[:]=np.random.rand(g.size)*0.1
         g.flat[:]=np.random.randn(g.size)
         Alpha=1.
         # self.CLM.measure_dLdg(g)
@@ -350,11 +364,29 @@ class ClassRunLM_Cov():
         
         g=self.CLM.recenterNorm(g)
         L=self.CLM.L(g)
+        PM.Plot(g)
+
+        # self.CLM.buildFulldJdg(g)
+        # return
+
+        # from pyhmc import hmc
+        # T=ClassTimeIt.ClassTimeIt()
+        # r = hmc(self.CLM.logprob,
+        #               x0=g,
+        #               n_samples=int(10000.),
+        #               display=True,
+        #               epsilon=0.2,
+        #               return_diagnostics=True)
+        # gArray=r[0]
+        # gMean=np.mean(gArray,axis=0)
+        # T.timeit("mcmc")
+        # PM.PlotHist(gMean,NTry=500,gArray=gArray)
+        # return
+
         L_L=[L]
         L_dL=[]
         PM.L_L=L_L
         L_g=[g.copy()]
-        PM.Plot(g)
         
         while True:
             g=self.CLM.recenterNorm(g)
@@ -374,7 +406,7 @@ class ClassRunLM_Cov():
             dL=L-L_L[-1]
             if Alpha<1e-7 or HasConverged:
                 log.print(ModColor.Str("STOP"))
-                PM.PlotHist(g,NTry=500)
+                PM.Plot(g,NTry=500,Force=True)
                 return g
             if L<L_L[-1]:
                 log.print(ModColor.Str("Things are getting worse"))

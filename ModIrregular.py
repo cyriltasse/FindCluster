@@ -172,7 +172,7 @@ def giveIrregularCumulDist(X0,xmm=None,Type="Discrete"):
         x1=X0.max()+1.
     else:
         x0,x1=xmm
-    X=np.sort(X0)
+    X=np.float64(np.sort(X0))
 
     if Type=="Continuous":
         xx=X
@@ -183,10 +183,10 @@ def giveIrregularCumulDist(X0,xmm=None,Type="Discrete"):
         NMax=1+X.size
         y=np.linspace(0,1,X.size+1)
         
-        xx=np.zeros((NMin*2,),np.float32)
+        xx=np.zeros((NMin*2,),np.float64)
         xx[0]=x0
-        xx[1:-1][0::2]=X[:]-1e-7
-        xx[1:-1][1::2]=X[:]+1e-7
+        xx[1:-1][0::2]=X[:]-1e-10
+        xx[1:-1][1::2]=X[:]+1e-10
         xx[-1]=x1
         yy=np.zeros_like(xx)
         yy[0]=0
