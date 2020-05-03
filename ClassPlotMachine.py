@@ -47,11 +47,13 @@ class ClassPlotMachine():
         self.CLM=CLM
         self.GM=CLM.MassFunction.GammaMachine
         self.L_L=[]
+        self.ScaleCube="log"
+        #self.ScaleCube="linear"
         if XSimul is not None:
-            self.LTrue=self.CLM.L(XSimul)
+            self.LTrue=self.CLM.logP(XSimul)
             log.print("Set XSimul with L=%f"%self.LTrue)
             self.XSimul=XSimul
-            self.CubeSimul=self.GM.giveGammaCube(self.XSimul)
+            self.CubeSimul=self.GM.giveGammaCube(self.XSimul,ScaleCube=self.ScaleCube)
         self.iFig=0
         self.iCall=0
         self.StepPlot=StepPlot
@@ -67,7 +69,7 @@ class ClassPlotMachine():
         self.iCall+=1
 
     def PlotLogDiff(self,g):
-        CubeBest=self.GM.giveGammaCube(g)
+        CubeBest=self.GM.giveGammaCube(g,ScaleCube=self.ScaleCube)
         fig=pylab.figure("logDiff")
         cmap=pylab.cm.cubehelix
         
@@ -85,10 +87,11 @@ class ClassPlotMachine():
         #                   linewidth=0)
 
         n=self.CLM.CM.DicoDATA["DicoSelFunc"]["n_z"].reshape((-1,1,1))
-        y=(CubeBest*n).flatten()
-        ys=(self.CubeSimul*n).flatten()
-        x,y=np.log10(ys),np.log10(y/ys)
-        ax.hexbin(x,y, gridsize=50, cmap='inferno',extent=(x.min()-0.1,x.max()+0.1,-2,2))
+        y=(CubeBest)
+        ys=(self.CubeSimul)
+        #x,y=np.log10(ys),np.log10(y/ys)
+        x=ys
+        ax.hexbin((x+np.log(n)).flatten(),((y-ys)).flatten(), gridsize=50, cmap='inferno')#,extent=(x.min()-0.1,x.max()+0.1,-2,2))
         # pylab.xlim(-1.5,1.5)
         # pylab.ylim(-2,2)
         pylab.draw()
@@ -100,7 +103,7 @@ class ClassPlotMachine():
         GM=self.GM
         L_NParms=GM.L_NParms
 
-        L=self.CLM.L(g)
+        L=self.CLM.logP(g)
         #self.L_L.append(L)
         LTrue=self.LTrue
         L_L=self.L_L
@@ -114,41 +117,45 @@ class ClassPlotMachine():
         if gArray is not None:
             NTry=gArray.shape[0]
         elif not FullHessian:
-            dJdg=self.CLM.dJdg(g).flat[:]
+            dJdg=self.CLM.d2logPdg2(g,Diag=True).flat[:]
             Sig=np.sqrt(1./np.abs(dJdg))#/2.
             gArray=np.array([g+Sig*np.random.randn(*g.shape) for iTry in range(NTry)])
         elif FullHessian:
             log.print("  building Hessian...")
-            dJdG=self.CLM.dJdg(g,Diag=False)
+            dJdG=self.CLM.d2logPdg2(g,Diag=False)
             dJdG=(dJdG+dJdG.T)/2.
             # idJdG=ModLinAlg.invSVD(dJdg)
             log.print("  doing SVD...")
-            dJdG=np.diag(np.diag(dJdG))
+            #dJdG=np.diag(np.diag(dJdG))
             Us,ss,Vs=np.linalg.svd(dJdG)
 
             sss=ss[ss>0]
             log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
+
+            Th=1e-6
+            ind=np.where(ss<ss.max()*Th)[0]
             ssqs=1./np.sqrt(ss)
-            ind=np.where(ssqs>1e-2*ssqs.max())[0]
-            Us=Us[:,ind]
-            ssqs=ssqs.flat[ind]
+            ssqs[ind]=0
+            # ind=np.where(ssqs>1e-2*ssqs.max())[0]
+            # Us=Us[:,ind]
+            # ssqs=ssqs.flat[ind]
+            Us=Us[:,:]
+            ssqs=ssqs.flat[:]
+            
             sqrtCs =Us*ssqs.reshape(1,ssqs.size)
             
             log.print("  creating random set...")
             gArray=np.array([ (g.flatten()+np.dot(sqrtCs,np.random.randn(ssqs.size,1)).flatten()) for iTry in range(NTry)])
             
+        ScaleCube=self.ScaleCube
         GammaStat=np.zeros((NTry,self.GM.NSlice,self.GM.NPix,self.GM.NPix),np.float32)
         for iTry in range(NTry):
-            GammaStat[iTry]=(self.GM.giveGammaCube(gArray[iTry]))
+            GammaStat[iTry]=(self.GM.giveGammaCube(gArray[iTry],ScaleCube=ScaleCube))
 
-        GammaStat[GammaStat<1e-10]=1e-10
-        CubeBest=self.GM.giveGammaCube(g)
+#        GammaStat[GammaStat<1e-10]=1e-10
+        CubeBest=self.GM.giveGammaCube(g,ScaleCube=ScaleCube)
         CubeSimul=self.CubeSimul
-        Scale="log"
-        if Scale=="log":
-            GammaStat=np.log10(GammaStat)
-            CubeSimul=np.log10(CubeSimul)
-            CubeBest=np.log10(CubeBest)
+
         Cube_mean=np.mean(GammaStat,axis=0)
             
         ys=CubeSimul.flatten()

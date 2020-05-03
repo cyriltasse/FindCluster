@@ -57,8 +57,8 @@ def test(DoPlot=False,ComputeInitCube=False):
                              ComputeInitCube=ComputeInitCube)
 
     
-    LMMachine.testJacob()
-    return
+    # LMMachine.testJacob()
+    # return
     
     g=LMMachine.runLM()
     np.save("gEst.npy",g)
@@ -100,7 +100,7 @@ class ClassRunLM_Cov():
         if (self.NPix%2)!=0:
             self.NPix+=1
         
-        self.NPix=5
+        self.NPix=11
         log.print("Choosing NPix=%i"%self.NPix)
 
         self.CM=ClassCatalogMachine.ClassCatalogMachine()
@@ -235,9 +235,9 @@ class ClassRunLM_Cov():
             z=self.GM.zmg
             p=1./(sig*np.sqrt(2.*np.pi)) * np.exp(-np.float128((z-z[iSlice])**2/(2.*sig**2)))
             p/=np.sum(p)
-            # p=np.float64(p)
-            # p.fill(0)            
-            # p[iSlice]=1
+            p=np.float64(p)
+            p.fill(0)            
+            p[iSlice]=1
             #print(p)
             ThisNzt[:]=p[:]
             ThisX=[]
@@ -325,7 +325,7 @@ class ClassRunLM_Cov():
         g=self.X
         #g.fill(0)
 
-        LTrue=self.CLM.L(g)
+        LTrue=self.CLM.logP(g)
         log.print("True Likelihood = %.5f"%(LTrue))
         PM=ClassPlotMachine.ClassPlotMachine(self.CLM,
                                              XSimul=self.XSimul,
@@ -347,7 +347,7 @@ class ClassRunLM_Cov():
         iStep=0
         def f(g):
             self.CLM.MassFunction.updateGammaCube(g)
-            L=self.CLM.L(g)
+            L=self.CLM.logP(g)
             print(g,L)
             return L
         C=GeneDist.ClassDistMachine()
@@ -363,7 +363,7 @@ class ClassRunLM_Cov():
         HasConverged=False
         
         g=self.CLM.recenterNorm(g)
-        L=self.CLM.L(g)
+        L=self.CLM.logP(g)
         PM.Plot(g)
 
         # self.CLM.buildFulldJdg(g)
@@ -398,7 +398,7 @@ class ClassRunLM_Cov():
             # self.CLM.measure_dLdg(g)
             # stop
             T.timeit("Plot")
-            L=self.CLM.L(g)
+            L=self.CLM.logP(g)
             log.print("Likelihood = %.5f"%(L))
             T.timeit("Compute L")
             UpdateX=True
@@ -430,7 +430,7 @@ class ClassRunLM_Cov():
                 if dL!=0 and len(L_dL)>20:
                     Mean_dL=np.mean(np.array(L_dL)[-10:])
                     log.print("  Mean_dL=%f"%Mean_dL)
-                    if Mean_dL<0.001:
+                    if Mean_dL<0.1:
                         log.print(ModColor.Str("Likelihood does not improve anymore"))
                         HasConverged=True
                     
@@ -445,7 +445,7 @@ class ClassRunLM_Cov():
                 #    return g
                     
 
-            dldg=self.CLM.dLdg(g).flat[:]#/ssqs.flat[:]
+            dldg=self.CLM.dlogPdg(g).flat[:]#/ssqs.flat[:]
             T.timeit("Compute J")
             
             # epsilon=np.sum(dldg**2)/np.sum(dldg**2*dJdg)

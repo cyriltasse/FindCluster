@@ -130,7 +130,7 @@ class ClassLikelihoodMachine():
         # pylab.show(block=False)
         # pylab.pause(0.1)
 
-        dLdg_0=self.dlogLdg(g)
+        dLdg_0=self.dlogPdg(g)
         dJdg1_row=np.zeros((Parm_id.size,dLdg_0.size),np.float64)
         dJdg1=np.zeros((Parm_id.size,),np.float64)
         for i in range(Parm_id.size):
@@ -200,7 +200,8 @@ class ClassLikelihoodMachine():
 
     def logP(self,g):
         logL=self.logL(g)
-        logL=0.
+        
+        #logL=0.
         if self.MAP:
             logL+=self.CSW.logP_x(g.flatten())
         return logL
@@ -210,7 +211,7 @@ class ClassLikelihoodMachine():
         NParms=self.MassFunction.GammaMachine.NParms
         J=np.zeros((NParms,),np.float32)
         J+=self.dlogLdg(g)
-        J.fill(0)
+        #J.fill(0)
         if self.MAP:
             J+=self.CSW.dlogPdx(g.flatten())
         return J
@@ -218,7 +219,7 @@ class ClassLikelihoodMachine():
     def d2logPdg2(self,g0,Diag=True,ParmId=None):
         if Diag:
             H=self.d2logLdg2(g0)
-            H.fill(0)
+            #H.fill(0)
             if self.MAP:
                 H[:]+=self.CSW.d2logPdx2_Diag(g0.flatten())
         else:
@@ -235,7 +236,7 @@ class ClassLikelihoodMachine():
             #     H[i]=(dLdg1-dLdg0) / dg
                 
             H=self.d2logLdg2_Full(g0)
-            H.fill(0)
+            #H.fill(0)
             if self.MAP:
                 H+=self.CSW.d2logPdx2_Full(g0)
                 
@@ -244,7 +245,7 @@ class ClassLikelihoodMachine():
     # ################################################
         
     def logprob(self,g):
-        return np.float64(self.L(g)),np.float64(self.dLdg(g))
+        return np.float64(self.logP(g)),np.float64(self.dlogPdg(g))
 
 
     def logL(self,g0,DoPlot=0):

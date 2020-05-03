@@ -247,10 +247,10 @@ class ClassGammaMachine():
             ii+=N
         return XOut
 
-    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None,vmm=None):
+    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None,ScaleCube="linear",vmm=None):
         # return
         if X is not None:
-            self.computeGammaCube(X)
+            self.computeGammaCube(X,ScaleCube=ScaleCube)
         if Cube is None:
             Cube=self.GammaCube
 
@@ -323,14 +323,14 @@ class ClassGammaMachine():
         pylab.show(block=False)
         pylab.pause(0.1)
 
-    def computeGammaCube(self,X):
+    def computeGammaCube(self,X,ScaleCube="linear"):
 
         if self.CurrentX is not None:
-            if np.allclose(self.CurrentX,X):
+            if np.allclose(self.CurrentX,X) and self.CurrentScaleCube==ScaleCube:
                 #log.print("Current cube ok, skipping computation...")
                 return
         self.CurrentX=X.copy()
-        
+        self.CurrentScaleCube=ScaleCube
         LX=[]
         ii=0
         T=ClassTimeIt.ClassTimeIt("Gamma")
@@ -353,14 +353,18 @@ class ClassGammaMachine():
             # GammaCube[iz,:,:]=1.+y
             
             if self.ScaleCov=="log":
-                GammaCube[iz,:,:]=np.exp(y)
+                #print(ScaleCube)
+                if ScaleCube=="linear":
+                    GammaCube[iz,:,:]=np.exp(y)
+                elif ScaleCube=="log":
+                    GammaCube[iz,:,:]=y/np.log(10)
             elif self.ScaleCov=="Sigmoid":
                 GammaCube[iz,:,:]=ClassCovMatrix_Sim3D_2.Sigmoid(y,a=self.a_Sigmoid,MaxVal=self.MaxValueSigmoid)
                 stop
         T.timeit("Slices")
         self.GammaCube=GammaCube
 
-    def giveGammaCube(self,X):
-        self.computeGammaCube(X)
+    def giveGammaCube(self,X,ScaleCube="linear"):
+        self.computeGammaCube(X,ScaleCube=ScaleCube)
         return self.GammaCube
     
