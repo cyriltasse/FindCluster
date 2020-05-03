@@ -236,8 +236,8 @@ class ClassRunLM_Cov():
             p=1./(sig*np.sqrt(2.*np.pi)) * np.exp(-np.float128((z-z[iSlice])**2/(2.*sig**2)))
             p/=np.sum(p)
             p=np.float64(p)
-            p.fill(0)            
-            p[iSlice]=1
+            # p.fill(0)            
+            # p[iSlice]=1
             #print(p)
             ThisNzt[:]=p[:]
             ThisX=[]
@@ -430,7 +430,7 @@ class ClassRunLM_Cov():
                 if dL!=0 and len(L_dL)>20:
                     Mean_dL=np.mean(np.array(L_dL)[-10:])
                     log.print("  Mean_dL=%f"%Mean_dL)
-                    if Mean_dL<0.1:
+                    if Mean_dL<0.01:
                         log.print(ModColor.Str("Likelihood does not improve anymore"))
                         HasConverged=True
                     
