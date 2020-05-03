@@ -57,8 +57,8 @@ def test(DoPlot=False,ComputeInitCube=False):
                              ComputeInitCube=ComputeInitCube)
 
     
-    # LMMachine.testJacob()
-    # return
+    LMMachine.testJacob()
+    return
     
     g=LMMachine.runLM()
     np.save("gEst.npy",g)
@@ -100,7 +100,7 @@ class ClassRunLM_Cov():
         if (self.NPix%2)!=0:
             self.NPix+=1
         
-        self.NPix=11
+        self.NPix=5
         log.print("Choosing NPix=%i"%self.NPix)
 
         self.CM=ClassCatalogMachine.ClassCatalogMachine()
@@ -136,9 +136,9 @@ class ClassRunLM_Cov():
         self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
         self.DicoChains = shared_dict.create("DicoChains")
 
-        ###########################
-        self.finaliseInit()
-        ###########################
+        # ###########################
+        # self.finaliseInit()
+        # ###########################
 
         self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
 
@@ -311,8 +311,8 @@ class ClassRunLM_Cov():
     def testJacob(self):
         g=np.random.randn(self.GM.NParms)
         np.savez("gTestJacob.npz",g=g,Ln=self.GM.L_NParms)
-        self.CLM.measure_dLdg(g)
-        self.CLM.measure_dJdg(g)
+        self.CLM.measure_dlogPdg(g)
+        self.CLM.measure_d2logPdg2(g)
         
     def runLM(self,NMaxSteps=3000):
         T=ClassTimeIt.ClassTimeIt()

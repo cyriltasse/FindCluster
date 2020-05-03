@@ -71,13 +71,13 @@ class ClassLikelihoodMachine():
             #     CAD.Init(GM.L_NParms[iSlice],NTry=2000)
             #     self.LCSW.append(CAD)
                 
-    def measure_dLdg(self,g0,DoPlot=0):
+    def measure_dlogPdg(self,g0,DoPlot=0):
         g=g0.copy()
-        L0=self.L(g,DoPlot=DoPlot)
+        L0=self.logL(g,DoPlot=DoPlot)
 
-        dL_dg0=self.dLdg(g)
+        dL_dg0=self.dlogLdg(g)
         NN=g.size
-        dg=.0001
+        dg=.001
 
         NTest=100
         # Parm_id=np.arange(NN)[::-1][0:NTest]
@@ -87,7 +87,7 @@ class ClassLikelihoodMachine():
         for i in range(Parm_id.size):
             g1=g.copy()
             g1[Parm_id[i]]+=dg
-            L1=self.L(g1,DoPlot=DoPlot)
+            L1=self.logL(g1,DoPlot=DoPlot)
             dL_dg1[i]=(L0-L1)/((g-g1)[Parm_id[i]])
             if (L0-L1)==0:
                 print("  0 diff for iParm = %i"%i)
@@ -104,42 +104,42 @@ class ClassLikelihoodMachine():
 
     # #############################################
 
-    def measure_dJdg(self,g0,DoPlot=0):
+    def measure_d2logPdg2(self,g0,DoPlot=0):
         
         g=g0.copy()
 
         NN=g.size
         dg=1e-2
 
-        NTest=100
-        # Parm_id=np.arange(NN)[::-1][0:NTest]
+        NTest=1
         Parm_id=np.int64(np.random.rand(NTest)*g.size)
-        dJdg1=np.zeros((Parm_id.size,),np.float64)
+        Parm_id=np.arange(NN)
 
-        MAP=True
-        dJdg0=self.dJdg(g,Diag=True,MAP=MAP)
-        dJdg0_Full=self.dJdg(g,
-                             Diag=False,
-                             MAP=MAP,
-                             ParmId=Parm_id)
+        dJdg0=self.d2logPdg2(g,Diag=True)
+        dJdg0_Full=self.d2logPdg2(g,
+                                  Diag=False,
+                                  ParmId=Parm_id)
         
         #dJdg2=self.buildFulldJdg(g,ParmId=Parm_id)
         pylab.figure("Hessian")
         pylab.clf()
-        pylab.plot(dJdg0[Parm_id],label="Pure Diag",color="black")
-        pylab.plot(np.diag(dJdg0_Full)[Parm_id],label="np.diag(Full)",ls="--",lw=2)
+        pylab.plot(dJdg0[Parm_id],label="CalcDiag",color="black")
+        pylab.plot(np.diag(dJdg0_Full)[Parm_id],label="np.diag(CalcFull)",ls="--",lw=2)
         # #pylab.plot(np.diag(dJdg2)[Parm_id])
         # pylab.draw()
         # pylab.show(block=False)
         # pylab.pause(0.1)
 
-        dLdg_0=self.dLdg(g)
+        dLdg_0=self.dlogLdg(g)
+        dJdg1_row=np.zeros((Parm_id.size,dLdg_0.size),np.float64)
+        dJdg1=np.zeros((Parm_id.size,),np.float64)
         for i in range(Parm_id.size):
             print("%i/%i"%(i,Parm_id.size))
             g1=g.copy()
             g1[Parm_id[i]]+=dg
-            dLdg_1=self.dLdg(g1,MAP=MAP)
+            dLdg_1=self.dlogPdg(g1)
             dJdg1[i]=(dLdg_0[Parm_id[i]]-dLdg_1[Parm_id[i]]) / ((g-g1)[Parm_id[i]])
+            dJdg1_row[i,:]=(dLdg_1-dLdg_0) / dg
 
         # pylab.plot(dL_dg0[Parm_id]/dL_dg1)
         pylab.plot(dJdg1,label="measure of diag",ls="-.",lw=2)
@@ -148,36 +148,95 @@ class ClassLikelihoodMachine():
         pylab.show(block=False)
         pylab.pause(0.1)
 
+        
+        #I0=np.log10(np.abs(dJdg0_Full))
+        #I1=np.log10(np.abs(dJdg1_row))
+        I0=(np.abs(dJdg0_Full))
+        I1=(np.abs(dJdg1_row))
+        I0[I0<=0]=1e-10
+        I1[I1<=0]=1e-10
+        I1=np.log10(I1)
+        I0=np.log10(I0)
+        v0=np.min([I0.min(),I1.min()])
+        v1=np.max([I0.max(),I1.max()])
+        #m=np.median(I0[I0>0])
+        #v0,v1=0,100*m
+        
+        pylab.figure("Full Hessian")
+        pylab.clf()
+        
+        ax=pylab.subplot(2,2,1)
+        pylab.imshow(I1,interpolation="nearest",vmin=v0,vmax=v1)
+        pylab.title("measured")
+        pylab.subplot(2,2,2,sharex=ax,sharey=ax)
+        pylab.imshow(I0,interpolation="nearest",vmin=v0,vmax=v1)
+        pylab.title("computed")
+        pylab.subplot(2,2,3,sharex=ax,sharey=ax)
+        pylab.imshow(I1-I0,interpolation="nearest",vmin=-1,vmax=1)
+        pylab.title("resid")
+        pylab.colorbar()
+        
+        # ind=np.int64(np.random.rand(1000)*dJdg1_row.size)
+        # x=dJdg1_row.T.flatten()[ind]
+        # y=dJdg0_Full[Parm_id,:].T.flatten()[ind]
+        # #x=np.log10(np.abs(x))
+        # #y=np.log10(np.abs(y))
+        # #x=np.log10(np.abs(x))
+        # #y=np.log10(np.abs(y))
+        # pylab.plot(x,label="row measured",color="black")
+        # pylab.plot(y,ls="--",label="row computed")
+        # # pylab.plot(dJdg1_row.T,label="row measured",color="black")
+        # # pylab.plot(dJdg0_Full[Parm_id,:].T,ls="--",label="row computed")
+        # pylab.legend()
+        
+        pylab.draw()
+        pylab.show(False)
+        pylab.pause(0.1)
+
+        
+
+        
     # ################################################
 
-    def dJdg(self,g0,MAP=True,Diag=True,ParmId=None):
-        if Diag:
-            H=self.d2Pdg2(g0)
+    def logP(self,g):
+        logL=self.logL(g)
+        logL=0.
+        if self.MAP:
+            logL+=self.CSW.logP_x(g.flatten())
+        return logL
+    
 
-            if self.MAP and MAP:
+    def dlogPdg(self,g):
+        NParms=self.MassFunction.GammaMachine.NParms
+        J=np.zeros((NParms,),np.float32)
+        J+=self.dlogLdg(g)
+        J.fill(0)
+        if self.MAP:
+            J+=self.CSW.dlogPdx(g.flatten())
+        return J
+    
+    def d2logPdg2(self,g0,Diag=True,ParmId=None):
+        if Diag:
+            H=self.d2logLdg2(g0)
+            H.fill(0)
+            if self.MAP:
                 H[:]+=self.CSW.d2logPdx2_Diag(g0.flatten())
         else:
-            H=np.zeros((g0.size,g0.size),np.float64)
-            dg=1e-3
-            dLdg0=self.dLdg(g0,MAP=False)
-
-            if ParmId is None:
-                ParmId=np.arange(g0.size)
-            for ii,i in enumerate(ParmId):
-                print("%i/%i"%(ii,ParmId.size))
-                g1=g0.copy()
-                g1[i]+=dg
-                dLdg1=self.dLdg(g1,MAP=False)
-                H[i]=(dLdg1-dLdg0) / dg
-
-            pylab.figure("Full Hessian")
-            pylab.clf()
-            pylab.imshow(np.log10(np.abs(H)),interpolation="nearest")
-            pylab.draw()
-            pylab.show(False)
-            pylab.pause(0.1)
-
-            if self.MAP and MAP:
+            # H=np.zeros((g0.size,g0.size),np.float64)
+            # dg=1e-3
+            # dLdg0=self.dlogLdg(g0)
+            # if ParmId is None:
+            #     ParmId=np.arange(g0.size)
+            # for ii,i in enumerate(ParmId):
+            #     print("%i/%i"%(ii,ParmId.size))
+            #     g1=g0.copy()
+            #     g1[i]+=dg
+            #     dLdg1=self.dlogLdg(g1)
+            #     H[i]=(dLdg1-dLdg0) / dg
+                
+            H=self.d2logLdg2_Full(g0)
+            H.fill(0)
+            if self.MAP:
                 H+=self.CSW.d2logPdx2_Full(g0)
                 
         return H
@@ -186,8 +245,9 @@ class ClassLikelihoodMachine():
         
     def logprob(self,g):
         return np.float64(self.L(g)),np.float64(self.dLdg(g))
-    
-    def L(self,g0,DoPlot=0):
+
+
+    def logL(self,g0,DoPlot=0):
         GM=self.MassFunction.GammaMachine
         g0=np.float64(g0)
         
@@ -214,13 +274,8 @@ class ClassLikelihoodMachine():
 
         
         if DoPlot: GM.PlotGammaCube(Cube=GM.GammaCube,FigName="JacobCube")
-        # SumNx_0=np.sum(TypeSum((n_z.reshape(-1,1,1)*self.CellRad_0**2)*GM.GammaCube))
-        SumNx_0=np.sum(TypeSum(n_z.reshape(-1,1,1)*GM.GammaCube).flat[self.IndexCube_Mask])*self.CellRad_0**2/self.fNormLog
-        # SumNx_0=np.sum([TypeSum(n_z[i]*GM.GammaCube[i]).flat[self.IndexCube_Mask_Slice] for i in range(self.NSlice)])*self.CellRad_0**2
-        #print("nz", (n_z*self.CellRad_0**2), SumNx_0)
-        #print(GM.GammaCube)
         
-        Nx_1=np.zeros((Ns,),np.float32)
+        Nx_1=np.zeros((Ns,),np.float64)
         # Ax_1=np.zeros((Ns,),np.float32)
         L_Ax_1_z=[]
         for iSlice in range(self.NSlice):
@@ -229,43 +284,30 @@ class ClassLikelihoodMachine():
             Ax_1_z=n_zt[:,iSlice]*Gamma_i*self.CellRad_1**2
             #Ax_1[:]+=Ax_1_z
             L_Ax_1_z.append(Ax_1_z)
+
+        L=np.float64([0.])
+        # #######################
+        # SumNx_0=np.sum(TypeSum((n_z.reshape(-1,1,1)*self.CellRad_0**2)*GM.GammaCube))
+        SumNx_0=np.sum(TypeSum(n_z.reshape(-1,1,1)*GM.GammaCube).flat[self.IndexCube_Mask])*self.CellRad_0**2/self.fNormLog
+        L+=-SumNx_0
+
+        # #######################
         SumNx_1=np.sum(TypeSum(Nx_1))
+        L+= SumNx_1
+
+        
+        # #######################
         self.Ax_1_z=np.array(L_Ax_1_z)
         self.Ax_1=np.sum(TypeSum(self.Ax_1_z),axis=0)
-        
         SumAx_1=np.sum(self.funcNormLog(TypeSum(self.Ax_1)))
-        #print(SumNx_0, SumNx_1, SumAx_1)
-        L=-SumNx_0 + SumNx_1 + SumAx_1
-
-        if self.MAP:
-            # for CAD in self.LCAD:
-            #     L+=CAD.logP_x(g.flatten())
-            # ii=0
-            # for iSlice in range(self.NSlice):
-            #     ThisNParms=L_NParms[iSlice]
-            #     iPar=ii
-            #     jPar=iPar+ThisNParms
-            #     L+=self.PowerMAP*self.LCSW[iSlice].logP_x(g.flatten()[iPar:jPar])
-            #     ii+=ThisNParms
-            L+=self.CSW.logP_x(g.flatten())
-
-            # if self.CSWFull is not None:
-            #     L+=self.CSWFull.logP_x(g.flatten())
-            
-            # k=g.size
-            # gTg=np.dot(g.T,g).flat[0]+1e-10
-            # L+= - (1/2.)*gTg + (k/2-1)*np.log(gTg)
-            # #L+= - (1/2.)*gTg
-            
-        #L=  (k/2-1)*np.log(gTg)
-        # L=-SumNx_0 + SumAx_1# - (1/2.)*np.dot(g.T,g).flat[0]
-        #L=-SumNx_0# - (1/2.)*np.dot(g.T,g).flat[0]
-        #L= + SumNx_1# - (1/2.)*np.dot(g.T,g).flat[0]
-        #L= SumAx_1
+        L+= SumAx_1
+        
         self.gCurrentL=g0.copy()
-        return L
+        return L[0]
 
-    def dLdg(self,g0,Slice=None,MAP=True):
+    
+    
+    def dlogLdg(self,g0,Slice=None):
 
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
@@ -292,7 +334,7 @@ class ClassLikelihoodMachine():
         # print(GM.GammaCube.flat[0])
             
         ii=0
-        J=np.zeros((NParms,),np.float32)
+        J=np.zeros((NParms,),np.float64)
         if Slice is None:
             Sl=slice(None)
         else:
@@ -306,54 +348,33 @@ class ClassLikelihoodMachine():
             
             GammaSlice=GM.GammaCube[iSlice]
             SqrtCov=L_SqrtCov[iSlice]
-            
-            dNx_0_dg=n_z[iSlice]*SqrtCov[:,:]*GammaSlice.reshape((-1,1))*self.CellRad_0**2
-            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,:],axis=0)#*np.log(10)
-            #Sum_dNx_0_dg=np.sum(dNx_0_dg,axis=0)*np.log(10)
-            
             SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,:]
+
+            # #######################
+            dNx_0_dg=n_z[iSlice]*SqrtCov[:,:]*GammaSlice.reshape((-1,1))*self.CellRad_0**2
+            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,:],axis=0)
+            J[iPar:jPar]+= -Sum_dNx_0_dg
+
+            # #########################
             dNx_1_dg=n_z[iSlice]*SqrtCov_xy[:,:]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))*self.CellRad_1**2
             Sum_dNx_1_dg=np.sum(dNx_1_dg,axis=0)
-            
+            J[iPar:jPar]+= Sum_dNx_1_dg
+
+            # #########################
             dAx_dg_0 = n_zt[:,iSlice].reshape((-1,1))*SqrtCov_xy[:,:]*GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))#*np.log(10)
             dAx_dg_1 = Sum_z_Ax_1_z
             dAx_dg   = dAx_dg_0/dAx_dg_1.reshape((-1,1))*self.CellRad_1**2
-            #print("A",dAx_dg_0.flat[0],dAx_dg_1.flat[0])
             Sum_dAx_dg=np.sum(dAx_dg,axis=0)
-            #print(Sum_dNx_0_dg.shape,Sum_dNx_1_dg.shape,Sum_dAx_dg.shape)
-            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg# - g0.flat[iPar:jPar] 
-            #J[iPar:jPar]=  + Sum_dNx_1_dg
-            #J[iPar:jPar]= -Sum_dNx_0_dg
-
-            #J[iPar:jPar]= g0.flat[iPar:jPar]
-            #J[iPar:jPar]=  Sum_dAx_dg# - g0.flat[iPar:jPar]
-            #J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg
-            #J[iPar:jPar]=  + Sum_dAx_dg
-            #J[iPar:jPar]= -Sum_dNx_0_dg
-            #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
-
-            # if self.MAP:
-            #     #J[iPar:jPar]+=self.LCAD[iSlice].dlogPdx(g[iPar:jPar].flatten())
-            #     J[iPar:jPar]+=self.PowerMAP*self.LCSW[iSlice].dlogPdx(g[iPar:jPar].flatten())
+            J[iPar:jPar]+= + Sum_dAx_dg
                 
             ii+=ThisNParms
 
-
-        if self.MAP and MAP:
-            #J+=self.CSWFull.dlogPdx(g.flatten())
-            
-            J[Sl]+=self.CSW.dlogPdx(g.flatten())[Sl]
-
-        #     k=g0.size
-        #     gTg=np.sum(g0**2)+1e-10
-        #     J[:]+= -g0.flat[:] + 2*(k/2-1)*g0.flat[:]/gTg
-        #     #J[:]+= -g0.flat[:]# + 2*(k/2-1)*g0.flat[:]/gTg
-        # #J[:]+=  2*(k/2-1)*g0.flat[:]/gTg
         return J
 
+    # #################################
+    # HESSIANs
 
-
-    def d2Pdg2(self,g0):
+    def d2logLdg2(self,g0):
 
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
@@ -378,7 +399,7 @@ class ClassLikelihoodMachine():
         Sum_z_Ax_1_z=np.sum(Ax_1_z,axis=0)
             
         ii=0
-        J=np.zeros((NParms,),np.float32)
+        H=np.zeros((NParms,),np.float32)
         for iSlice in range(self.NSlice):
             ThisNParms=L_NParms[iSlice]
             iPar=ii
@@ -386,40 +407,134 @@ class ClassLikelihoodMachine():
             
             GammaSlice=GM.GammaCube[iSlice]
             SqrtCov=L_SqrtCov[iSlice]
-            
-            dNx_0_dg=n_z[iSlice] * (SqrtCov[:,:])**2 * GammaSlice.reshape((-1,1))*self.CellRad_0**2*self.fNormLog
-            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,:],axis=0)#*np.log(10)
-            #Sum_dNx_0_dg=np.sum(dNx_0_dg,axis=0)*np.log(10)
-            
             SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,:]
+
+            # ##################################"
+            dNx_0_dg=n_z[iSlice] * (SqrtCov[:,:])**2 * GammaSlice.reshape((-1,1))*self.CellRad_0**2*self.fNormLog
+            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,:],axis=0)
+            H[iPar:jPar]+= -Sum_dNx_0_dg
+
+            
+            # ##################################"
             dNx_1_dg=n_z[iSlice]*(SqrtCov_xy[:,:])**2 * GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))*self.CellRad_1**2
             Sum_dNx_1_dg=np.sum(dNx_1_dg,axis=0)
+            H[iPar:jPar]+= + Sum_dNx_1_dg
+
             
-            dAx_dg_0 = n_zt[:,iSlice].reshape((-1,1))* (SqrtCov_xy[:,:]) * GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))#*np.log(10)
+            # ##################################"
+            dAx_dg_0 = n_zt[:,iSlice].reshape((-1,1))* (SqrtCov_xy[:,:]) \
+                       * GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))#*np.log(10)
             dAx_dg_1 = Sum_z_Ax_1_z
-            
             dAx_dg_A   = SqrtCov_xy[:,:]*dAx_dg_0 / dAx_dg_1.reshape((-1,1)) * self.CellRad_1**2
-
             dAx_dg_B   = - ( (dAx_dg_0 * dAx_dg_0) * self.CellRad_1**4 / (dAx_dg_1.reshape((-1,1)))**2 )
-            
             dAx_dg = dAx_dg_A + dAx_dg_B
-
             Sum_dAx_dg=np.sum(dAx_dg,axis=0)
-            #print(Sum_dNx_0_dg.shape,Sum_dNx_1_dg.shape,Sum_dAx_dg.shape)
-            J[iPar:jPar]= -Sum_dNx_0_dg + Sum_dNx_1_dg + Sum_dAx_dg#g0.flat[iPar:jPar]
-            #print(J[iPar:jPar])
-            #J[iPar:jPar]= 0
-            #print(iSlice,np.abs(Sum_dNx_0_dg).max(),np.abs(Sum_dNx_1_dg).max(),np.abs(Sum_dAx_dg).max())
-            
-            # if self.MAP:
-            #     #J[iPar:jPar]+=np.abs(self.LCAD[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
-            #     J[iPar:jPar]+=self.PowerMAP*(self.LCSW[iSlice].d2logPdx2(g[iPar:jPar].flatten()))
+            H[iPar:jPar]+= + Sum_dAx_dg
             
             ii+=ThisNParms
 
         
-        return J
+        return H
 
+    # #############################
+    # FULLLLL
+    
+    def d2logLdg2_Full(self,g0):
+
+        T=ClassTimeIt.ClassTimeIt()
+        T.disable()
+        GM=self.MassFunction.GammaMachine
+        GM.computeGammaCube(g0)
+        g=g0.reshape((-1,1))
+        T.timeit("Compute Gamma")
+        L_SqrtCov=GM.L_SqrtCov
+        L_NParms=GM.L_NParms
+        NParms=GM.NParms
+        Ns=self.CM.Cat_s.shape[0]
+        n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
+        n_zt=self.CM.Cat_s.n_zt
+
+        # Sum_z_Ax_1_z=np.sum(self.Ax_1_z,axis=0)
+        L_Ax_1_z=[]
+        for iSlice in range(self.NSlice):
+            Gamma_i=GM.GammaCube[iSlice].flat[self.IndexCube_xy_Slice]
+            Ax_1_z=n_zt[:,iSlice]*Gamma_i*self.CellRad_1**2
+            L_Ax_1_z.append(Ax_1_z)
+        Ax_1_z=np.array(L_Ax_1_z)
+        Sum_z_Ax_1_z=np.sum(Ax_1_z,axis=0)
+
+        DicoIndex={}
+        ii=0
+        for iSlice in range(self.NSlice):
+            ThisNParms=L_NParms[iSlice]
+            iPar=ii
+            jPar=iPar+ThisNParms
+            DicoIndex[iSlice]=(iPar,jPar)
+            ii+=ThisNParms
+            
+        ii=0
+        H=np.zeros((NParms,NParms),np.float32)
+        
+        dAidg=np.zeros((Ns,NParms),np.float32)
+        for iSlice in range(self.NSlice):
+            GammaSlice=GM.GammaCube[iSlice]
+            i0,i1=DicoIndex[iSlice]
+            ThisNParms=i1-i0
+            SqrtCov=L_SqrtCov[iSlice]
+            SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,:]
+            iPar,jPar=i0,i1
+            ng=n_zt[:,iSlice].reshape((-1,1))* GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))
+            dAidg[:,i0:i1] = ng * SqrtCov_xy.reshape((Ns,ThisNParms)) 
+        
+        for iSlice in range(self.NSlice):
+            GammaSlice=GM.GammaCube[iSlice]
+            i0,i1=DicoIndex[iSlice]
+            ThisNParms=i1-i0
+            SqrtCov=L_SqrtCov[iSlice]
+            SqrtCov_xy=SqrtCov[self.IndexCube_xy_Slice,:]
+            iPar,jPar=i0,i1
+            
+            
+            # ##################################
+            dNx_0_dg=n_z[iSlice]\
+                      * SqrtCov.reshape((self.NPix**2,ThisNParms,1))\
+                      * SqrtCov.reshape((self.NPix**2,1,ThisNParms))\
+                      * GammaSlice.reshape((-1,1,1))*self.CellRad_0**2*self.fNormLog
+            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,...],axis=0)
+            H[iPar:jPar,iPar:jPar]+= - Sum_dNx_0_dg
+            
+            # ##################################
+            dNx_1_dg=n_z[iSlice].reshape(-1,1,1)\
+                      * SqrtCov_xy.reshape((Ns,ThisNParms,1))\
+                      * SqrtCov_xy.reshape((Ns,1,ThisNParms))\
+                      * GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1,1))*self.CellRad_1**2
+            Sum_dNx_1_dg=np.sum(dNx_1_dg,axis=0)
+            H[iPar:jPar,iPar:jPar]+= Sum_dNx_1_dg
+
+            ng=n_zt[:,iSlice].reshape((-1,1))* GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))
+            dAx_dg_0 = ng.reshape(-1,1,1) * SqrtCov_xy.reshape((Ns,ThisNParms,1)) * SqrtCov_xy.reshape((Ns,1,ThisNParms))
+            H[iPar:jPar,iPar:jPar]+= np.sum(dAx_dg_0 * (Sum_z_Ax_1_z.reshape((-1,1,1)))**(-1),axis=0)*self.CellRad_1**2
+
+            for jSlice in range(self.NSlice):
+                GammaSlice_j=GM.GammaCube[jSlice]
+                j0,j1=DicoIndex[jSlice]
+                ThisNParms_j=j1-j0
+                SqrtCov_j=L_SqrtCov[jSlice]
+                SqrtCov_xy_j=SqrtCov_j[self.IndexCube_xy_Slice,:]
+
+
+
+                # ##################################
+                Js=dAidg[:,i0:i1]
+                Js_j=dAidg[:,j0:j1]
+                H[i0:i1,j0:j1]+= - np.sum(Js.reshape((Ns,ThisNParms,1))*Js_j.reshape((Ns,1,ThisNParms_j)) \
+                                          * (Sum_z_Ax_1_z.reshape((-1,1,1)))**(-2),axis=0)*self.CellRad_1**4
+            
+
+        
+        return H
+
+    
     def recenterNorm(self,X):
         return X
         return self.CSW.recenterNorm(X)
