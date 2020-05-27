@@ -35,7 +35,7 @@ def logit(x0,a=None,MaxVal=None):
 def measureCovMat():
     CCM=ClassCovMatrix(ReComputeFromSim=True)
     CCM.buildFromCatalog()
-    CCM.MeasureCovInMap()
+    #CCM.MeasureCovInMap()
     # CellSizeRad=0.001*np.pi/180
     # zz=np.linspace(0.01,1.5,10)
     # for z in zz:
@@ -159,14 +159,16 @@ class ClassCovMatrix():
         
         self.DicoSim["G"]=self.DicoSim["Gamma"]-np.mean(self.DicoSim["Gamma"])
         self.Gamma=self.DicoSim["Gamma"]
-        
+
+        fig=pylab.figure("Gamma")
         for i in range(Im.shape[-1])[::10]:
             pylab.clf()
             pylab.imshow(self.Gamma[:,:,i])#,vmin=0.,vmax=10.)
             pylab.colorbar()
             pylab.draw()
-            pylab.show(False)
-            pylab.pause(0.3)
+            pylab.show(block=False)
+            pylab.pause(0.1)
+            fig.savefig("Gamma_%i.png"%i)
         
 
     def MeasureCovInMap(self):

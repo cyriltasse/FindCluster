@@ -22,9 +22,9 @@ class ClassEigenShapiroWilk():
             Li0=BinX[0:-2].tolist()
             Li1=BinX[2:].tolist()
 
-            BinX=np.int32(np.linspace(0,N,NBin))
-            Li0=BinX[0:-1].tolist()
-            Li1=BinX[1:].tolist()
+            # BinX=np.int32(np.linspace(0,N,NBin))
+            # Li0=BinX[0:-1].tolist()
+            # Li1=BinX[1:].tolist()
             Ln=[]
             Li0i1=[]
             for iSub,(i0,i1) in enumerate(zip(Li0,Li1)):
@@ -56,6 +56,7 @@ class ClassEigenShapiroWilk():
                 ggg=gg[i0:i1]
                 L+=self.DicoCSW[n].logP_x(ggg)
             ii+=ThisNParms
+            
         return L
     
     

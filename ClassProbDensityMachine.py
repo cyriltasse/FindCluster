@@ -85,15 +85,13 @@ class ClassProbDensityMachine():
             if np.max(self.CM.Cat.Pzm[ID][:,:])>0.:
                 self.CM.Cat.PosteriorOK[ID]=1
 
-        
-
-
     def compute_n_zt(self):
         log.print("Compute n_zt...")
         n_zm=self.CM.DicoDATA["DicoSelFunc"]["n_zm"]
         for ID in range(self.CM.Cat.shape[0]):
             self.CM.Cat.n_zt[ID][:]=np.sum(self.CM.Cat.Pzm[ID]*n_zm,axis=1)
-    
+
+
     def computePDF_ID(self,ID):
         if self.CM.Cat.chi_best[ID]==0. or np.isnan(self.CM.Cat.chi_best[ID]): return 0.
         Median_m=self.CM.Cat.Mass_median[ID]
@@ -107,22 +105,34 @@ class ClassProbDensityMachine():
         Pm=np.zeros((self.logM_g_hr.size,),np.float32)
         ind_l=np.where(self.logM_g_hr<Median_m)[0]
         ind_u=np.where(self.logM_g_hr>=Median_m)[0]
-        if ind_l.size>0: Pm[ind_l]=np.exp(-(Median_m-self.logM_g_hr[ind_l])**2/(2.*sig0_m**2))
-        if ind_u.size>0: Pm[ind_u]=np.exp(-(Median_m-self.logM_g_hr[ind_u])**2/(2.*sig1_m**2))
+
+        
+        sig0_m=np.max([0.05,np.abs(sig0_m)])
+        sig1_m=np.max([0.05,np.abs(sig1_m)])
+        
+        pl=np.exp(np.float128(-(Median_m-self.logM_g_hr[ind_l])**2/(2.*sig0_m**2)))
+        ph=np.exp(np.float128(-(Median_m-self.logM_g_hr[ind_u])**2/(2.*sig1_m**2)))
+        s=np.sum(np.concatenate([pl,ph]))
+        if ind_l.size>0: Pm[ind_l]=pl/s
+        if ind_u.size>0: Pm[ind_u]=ph/s
+        
         
         
         Pz=self.CM.Cat.pz[ID][self.ind_zg]
-        P=Pz.reshape((-1,1))*Pm.reshape((1,-1))
+        fIntZ=np.sum(self.CM.Cat.pz[ID][self.ind_zg])/np.sum(self.CM.Cat.pz[ID][:])
+        P=np.float64(Pz.reshape((-1,1))*np.float128(Pm.reshape((1,-1))))
         if np.max(P)==0:
             return 0.
         Pr=ndimage.mean(P, labels=self.LabelsArray, index=self.IndexArray)
         Pr=Pr.reshape((self.Nz_rebin,self.NlogM_rebin))
-        Pr/=np.sum(Pr)
+
+        sPr=np.sum(Pr)
+        if sPr>0:
+            Pr*=fIntZ/sPr
 
         # Pr.fill(0.)
         # Pr[self.Nz_rebin//2,self.NlogM_rebin//2]=1.
         
-        return Pr
     
         # pylab.clf()
         # pylab.subplot(1,2,1)
@@ -132,3 +142,5 @@ class ClassProbDensityMachine():
         # pylab.draw()
         # pylab.show(False)
         # pylab.pause(0.1)
+        
+        return Pr

@@ -29,6 +29,7 @@ def test():
 
     DM.setRefSample(X,W)
     DM.GiveSample(1000)
+import ModIrregular
 
 def GiveNonRedundantSample(Weight,N):
     # Ngen=1000
@@ -45,7 +46,7 @@ def GiveNonRedundantSample(Weight,N):
     for iSel in range(Nsel ):
         #print iSel
         DM=ClassDistMachine()
-        DM.setRefSample(indices,W=SSel,Ns=10000)
+        DM.setRefSample(indices,W=SSel,Ns=100)
         iSel=int(round(DM.GiveSample(1)[0]))
         II=set(indices)
         II.remove(iSel)
@@ -66,7 +67,11 @@ class ClassDistMachine():
     def setRefSample(self,X,W=None,Ns=100,xmm=None):
         x,D=self.giveCumulDist(X,W=W,Ns=Ns,xmm=xmm)
         self.xyCumulD=(x,D)
+
+    def setRefSampleIrregular(self,X,W=None):
+        self.GIrr=ModIrregular.giveIrregularCumulDist(X,W=W)
         
+        self.xyCumulD=(self.GIrr.x,self.GIrr.y)
         
     def giveCumulDist(self,X,W=None,Ns=10,Norm=True,xmm=None):
         xmin=X.min()

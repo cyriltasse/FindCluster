@@ -25,7 +25,8 @@ from DDFacet.Array import shared_dict
 import ClassShapiroWilk
 def GiveNXNYPanels(Ns,ratio=800/500):
     nx=int(round(np.sqrt(Ns/ratio)))
-    ny=int(nx*ratio)
+    #ny=int(nx*ratio)
+    ny=Ns//nx
     if nx*ny<Ns: ny+=1
     return nx,ny
 
@@ -247,7 +248,7 @@ class ClassGammaMachine():
             ii+=N
         return XOut
 
-    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None,ScaleCube="linear",vmm=None):
+    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None,ScaleCube="linear",vmm=None,DicoSourceXY=None):
         # return
         if X is not None:
             self.computeGammaCube(X,ScaleCube=ScaleCube)
@@ -258,7 +259,7 @@ class ClassGammaMachine():
             
         import pylab
 
-        fact=1.8
+        fact=1.5
         figsize=(13/fact,8/fact)
         fig=pylab.figure(FigName,figsize=figsize)
         self.CurrentFig=fig
@@ -268,19 +269,33 @@ class ClassGammaMachine():
 
         for iPlot in range(self.NSlice):
             S=Cube[iPlot]
+            iSlice=iPlot
             ax=pylab.subplot(Nx,Ny,iPlot+1)
             self.AxList.append(ax)
-            if np.count_nonzero(np.isnan(S))>0: stop
+            # if np.count_nonzero(np.isnan(S))>0:
+            #     stop
             if vmm is not None:
-                vmin,vmax=vmm
+                vmin,vmax=vmm[iSlice]
             else:
                 vmin,vmax=S.min(),S.max()
+            cmap=pylab.cm.cubehelix
+            cmap=pylab.cm.plasma
+            cmap=pylab.cm.inferno
+            cmap=pylab.cm.cividis 
             pylab.imshow(S,
                          interpolation="nearest",
                          vmin=vmin,vmax=vmax,
                          origin="lower",
-                         cmap=pylab.cm.cubehelix)
-            pylab.title("[%.2f - %.2f]"%(S.min(),S.max()))
+                         cmap=cmap)
+            #pylab.title("[%.2f - %.2f]"%(S.min(),S.max()))
+            pylab.title("%.2f < z < %.2f"%(self.zg[iPlot],self.zg[iPlot+1]))
+            if DicoSourceXY is not None:
+                s=DicoSourceXY["P"][:,iSlice]
+                rgba_colors = np.zeros((s.size,4))
+                rgba_colors[:,1:3] = 0
+                rgba_colors[:, 3] = s
+                ax.scatter(DicoSourceXY["X"],DicoSourceXY["Y"],s=3, color=rgba_colors)#,c="black",2*s[:,iSlice])
+                
         #pylab.tight_layout()
         pylab.draw()
         pylab.show(block=False)

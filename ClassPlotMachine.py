@@ -23,7 +23,8 @@ import scipy.optimize
 import GeneDist
 def GiveNXNYPanels(Ns,ratio=800/500):
     nx=int(round(np.sqrt(Ns/ratio)))
-    ny=int(nx*ratio)
+    #ny=int(nx*ratio)
+    ny=Ns//nx
     if nx*ny<Ns: ny+=1
     return nx,ny
 
@@ -37,7 +38,7 @@ def Sigmoid(x,a=1):
     return 1./(1+np.exp(-x/a))
 mdot=np.linalg.multi_dot
 
-from ClassShapiroWilk import *
+import ClassShapiroWilk
 
 class ClassPlotMachine():
     def __init__(self,
@@ -49,21 +50,32 @@ class ClassPlotMachine():
         self.L_L=[]
         self.ScaleCube="log"
         #self.ScaleCube="linear"
+        self.iFig=0
+        self.iCall=0
+        self.StepPlot=StepPlot
+        os.system("rm *.png")
         if XSimul is not None:
             self.LTrue=self.CLM.logP(XSimul)
             log.print("Set XSimul with L=%f"%self.LTrue)
             self.XSimul=XSimul
             self.CubeSimul=self.GM.giveGammaCube(self.XSimul,ScaleCube=self.ScaleCube)
-        self.iFig=0
-        self.iCall=0
-        self.StepPlot=StepPlot
-        os.system("rm *.png")
+            P=self.CubeSimul.copy()
+            P.fill(np.nan)
+            self.GM.PlotGammaCube(Cube=P,FigName="Points",
+                                  DicoSourceXY=DicoSourceXY)
+            self.SaveFig()
+            self.GM.PlotGammaCube(Cube=self.CubeSimul,FigName="Simul LogCube",
+                                  DicoSourceXY=DicoSourceXY)
+            self.SaveFig()
         
-    def Plot(self,g,NTry=100,Force=False,FullHessian=False):
+    def Plot(self,g,NTry=100,Force=False,FullHessian=False,gArray=None):
         if (self.iCall%self.StepPlot==0) or Force:
             log.print("Call %i... plotting"%self.iCall)
-            self.PlotHist(g,NTry=NTry,FullHessian=FullHessian)
-            self.PlotHistEigen(g)
+            self.PlotHist(g,
+                          NTry=NTry,
+                          FullHessian=FullHessian,
+                          gArray=gArray)
+            #self.PlotHistEigen(g)
             self.PlotLogDiff(g)
             self.iFig+=1
         self.iCall+=1
@@ -72,6 +84,8 @@ class ClassPlotMachine():
         CubeBest=self.GM.giveGammaCube(g,ScaleCube=self.ScaleCube)
         fig=pylab.figure("logDiff")
         cmap=pylab.cm.cubehelix
+        cmap=pylab.cm.plasma
+        cmap=pylab.cm.cividis
         
         Lc=cmap(np.linspace(0.1,0.9,self.GM.NSlice))
         ax=pylab.subplot(1,1,1)
@@ -91,7 +105,15 @@ class ClassPlotMachine():
         ys=(self.CubeSimul)
         #x,y=np.log10(ys),np.log10(y/ys)
         x=ys
-        ax.hexbin((x+np.log(n)).flatten(),((y-ys)).flatten(), gridsize=50, cmap='inferno')#,extent=(x.min()-0.1,x.max()+0.1,-2,2))
+        #x=(x+np.log(n)).flatten()
+        x=(x).flatten()
+        #ax.hexbin(x,((y-ys)).flatten(), gridsize=50, cmap='inferno',extent=(x.min()-0.1,x.max()+0.1,-2,2))
+        cm='cubehelix'
+        cm="plasma"
+        cm="cividis"
+        ax.hexbin(x,((y-ys)).flatten(), gridsize=50, cmap=cm,extent=(x.min()-0.1,x.max()+0.1,-2,2),mincnt=1)
+        pylab.xlabel("$ \log ( \gamma )$")
+        pylab.ylabel("$\log( \widehat{\gamma} ) - \log ( \gamma )$")
         # pylab.xlim(-1.5,1.5)
         # pylab.ylim(-2,2)
         pylab.draw()
@@ -237,7 +259,8 @@ class ClassPlotMachine():
         # self.GM.PlotGammaCube(Cube=(MeanCube-self.CubeSimul)/eCube,FigName="eCube",vmm=(-3,3))
         # self.GM.PlotCumulDistX(g)
 
-        self.GM.PlotGammaCube(Cube=CubeBest,FigName="Best LogCube")
+        vmm=[[self.CubeSimul[iSlice].min(),self.CubeSimul[iSlice].max()] for iSlice in range(self.CubeSimul.shape[0])]
+        self.GM.PlotGammaCube(Cube=CubeBest,FigName="Best LogCube",vmm=vmm)
         self.SaveFig()
         fact=1.8/2.
         figsize=(13/fact,8/fact)
@@ -259,7 +282,9 @@ class ClassPlotMachine():
         #        for iPlot,ax0 in enumerate(axes.flat):
         vmin=-2
         vmax=2
-
+        cmap=pylab.cm.cubehelix
+        cmap=pylab.cm.plasma
+        cmap=pylab.cm.cividis
         for iPlot in range(self.GM.NSlice):
             iSlice=iPlot
             ax0=fig.add_subplot(Nx,Ny,iPlot+1)
@@ -270,7 +295,8 @@ class ClassPlotMachine():
                        alpha=0.5,
                        vmin=vmin,
                        vmax=vmax,
-                       origin="lower")
+                       origin="lower",
+                       cmap=cmap)
 #            ax0.scatter(self.DicoSourceXY[iSlice]["X"],self.DicoSourceXY[iSlice]["Y"],color="black",s=7)
 
 
@@ -279,8 +305,8 @@ class ClassPlotMachine():
             rgba_colors[:,1:3] = 0
             rgba_colors[:, 3] = s
             Ns=self.CLM.CM.Cat_s.xCube.size
-            dx=np.random.rand(Ns)-0.5
-            dy=np.random.rand(Ns)-0.5
+            dx=0#np.random.rand(Ns)-0.5
+            dy=0#np.random.rand(Ns)-0.5
             ax0.scatter(self.DicoSourceXY["X"]+dx,self.DicoSourceXY["Y"]+dy,s=3, color=rgba_colors)#,c="black",2*s[:,iSlice])
             
             # rgba_colors[:,1:3] = 1
@@ -358,6 +384,8 @@ class ClassPlotMachine():
             BinX=np.int32(np.linspace(0,x.size+1,NBin))
             ax=pylab.subplot(Nx,Ny,iPlot+1)
             cmap=pylab.cm.cubehelix
+            cmap=pylab.cm.plasma
+            cmap=pylab.cm.cividis
             Lc=cmap(np.linspace(0.1,0.9,NBin))[::-1]
             
             for iBin in range(BinX.size-1):

@@ -53,6 +53,14 @@ class ClassF():
         if y is not None:
             self.y=y
         self.f=interp1d(self.x,self.y,bounds_error=False,fill_value=(self.y[0],self.y[-1]))
+
+    def Plot(self):
+        #pylab.figure("Irregular Function")
+        #pylab.clf()
+        pylab.plot(self.x,self.y)
+        #pylab.draw()
+        #pylab.show(block=False)
+        #pylab.pause(0.1)
         
     def T(self):
         return ClassF(self.y,self.x)
@@ -166,23 +174,29 @@ class ClassF():
         return ClassF(self.x,1./self.y)
         
     
-def giveIrregularCumulDist(X0,xmm=None,Type="Discrete"):
+def giveIrregularCumulDist(X0,W=None,xmm=None,Type="Discrete"):
     if xmm is None:
         x0=X0.min()-1.
         x1=X0.max()+1.
     else:
         x0,x1=xmm
-    X=np.float64(np.sort(X0))
 
+    ind=np.argsort(X0)
+    if W is not None:
+        W=W[ind]
+        W/=np.sum(W)
+    X=np.float64(X0[ind])
+    
     if Type=="Continuous":
         xx=X
         yy=np.linspace(0,1,xx.size+1)[1::]
-        
+        if W is not None: stop
     elif Type=="Discrete":
         NMin=1+X.size
         NMax=1+X.size
         y=np.linspace(0,1,X.size+1)
-        
+        if W is not None: 
+            y[1::]=np.cumsum(W)
         xx=np.zeros((NMin*2,),np.float64)
         xx[0]=x0
         xx[1:-1][0::2]=X[:]-1e-10

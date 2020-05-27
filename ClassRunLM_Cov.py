@@ -43,15 +43,19 @@ import ClassPlotMachine
 # # ##############################
 
 def test(DoPlot=False,ComputeInitCube=False):
+    pylab.close("all")
     rac_deg,decc_deg=241.20678,55.59485 # cluster
     FOV=0.15
     FOV=0.05
+    FOV=0.2
+#    FOV=0.1
+#    FOV=0.05
 #    FOV=0.02
 
     SubField={"rac_deg":rac_deg,
               "decc_deg":decc_deg,
               "FOV":FOV,
-              "CellDeg":0.001}
+              "CellDeg":0.002}
     LMMachine=ClassRunLM_Cov(SubField,
                              DoPlot=DoPlot,
                              ComputeInitCube=ComputeInitCube)
@@ -62,7 +66,6 @@ def test(DoPlot=False,ComputeInitCube=False):
     
     g=LMMachine.runLM()
     np.save("gEst.npy",g)
-    LMMachine.PM.Plot(g,FullHessian=True,Force=True)
     return
     g=np.load("gEst.npy")
     #    LMMachine.runMCMC(g)#LMMachine.XSimul.ravel())
@@ -100,17 +103,20 @@ class ClassRunLM_Cov():
         if (self.NPix%2)!=0:
             self.NPix+=1
         
-        self.NPix=11
+        # self.NPix=11
         log.print("Choosing NPix=%i"%self.NPix)
-
+        
         self.CM=ClassCatalogMachine.ClassCatalogMachine()
         self.CM.Init()
+        # self.CM.PlotPzZSPEC()
+        self.CM.Recompute_nz_nzt()
+        
         self.CM.cutCat(self.rac,self.decc,self.NPix,self.CellRad)
         self.zParms=self.CM.zg_Pars
         self.NSlice=self.zParms[-1]-1
         self.logMParms=self.CM.logM_Pars
         self.logM_g=np.linspace(*self.logMParms)
-
+        
         self.DistMachine=GeneDist.ClassDistMachine()
         z=np.linspace(-10,10,1000)
         g=g_z(z)
@@ -129,7 +135,6 @@ class ClassRunLM_Cov():
 
         # CLM.showRGB()
         #self.CLM.ComputeIndexCube(self.NPix)
-        pylab.close("all")
 
 
         # self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CLM,ScaleKpc=[200.,500.])
@@ -195,7 +200,15 @@ class ClassRunLM_Cov():
 
     def simulCat(self):
         log.print("Simulating catalog...")
-        self.X=np.random.randn(self.GM.NParms)
+        while True:
+            self.X=np.random.randn(self.GM.NParms)
+            self.CubeSimul=self.GM.giveGammaCube(self.X)
+            Mm=np.max(np.log10(self.CubeSimul))
+            log.print("maximum log-density: %f"%Mm)
+            if Mm>1.8:
+                break
+
+        
         #self.X=self.CLM.recenterNorm(self.X)
         # # self.X.fill(0.)
         
@@ -203,25 +216,30 @@ class ClassRunLM_Cov():
         # self.X=self.GM.CubeToVec(GammaCube)
         
         self.XSimul=self.X.copy()
-        self.CubeSimul=self.GM.giveGammaCube(self.X)
         self.GM.PlotGammaCube(Cube=np.log10(self.CubeSimul),FigName="Simul")
         
         
         GM=self.GM
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
-
+        #n_z.fill(n_z[0])
         
         #  # # print(":!::")
         # n_z.fill(1./self.CellRad**2)
         # n_z*=0.5
-        n_z*=10.
+        # n_z*=10.
         
         # pylab.clf()
         # pylab.plot(n_z)
         # pylab.draw()
         # pylab.show()
+        sPz=np.sum(np.sum(self.CM.Cat.Pzm,axis=-1),axis=-1)
+        Pzm=self.CM.Cat.Pzm/sPz.reshape((-1,1,1))
+        Pz=np.sum(Pzm,axis=-1)
+        zm=(self.CM.zGrid[1::]+self.CM.zGrid[0:-1])/2.
+        n_ztReal=self.CM.Cat.n_zt
+        zreal=self.CM.Cat.z1_median
         
-        n_zt=self.CM.Cat_s.n_zt
+        Ns=n_ztReal.shape[0]
         DicoSourceXY={}
         n_zt=[]
         X=[]
@@ -229,23 +247,51 @@ class ClassRunLM_Cov():
         LP=[]
         self.NCube=np.zeros_like(GM.GammaCube)
         for iSlice in range(self.NSlice):
+            log.print("Simulating iSlice = %i"%iSlice)
             GammaSlice=GM.GammaCube[iSlice]
             ThisNzt=np.zeros((self.NSlice,),np.float32)
             sig=0.05
             z=self.GM.zmg
+
+            indZ=np.where((zreal>self.GM.zg[iSlice])&(zreal<self.GM.zg[iSlice+1]))[0]
+            
+            
             p=1./(sig*np.sqrt(2.*np.pi)) * np.exp(-np.float128((z-z[iSlice])**2/(2.*sig**2)))
             p/=np.sum(p)
             p=np.float64(p)
-            # p.fill(0)            
-            # p[iSlice]=1
+            #p.fill(0)
+            #p[iSlice]=1*n_z[iSlice]
             #print(p)
-            ThisNzt[:]=p[:]
+            #p.fill(1./p.size)
+            ThisNzt[:]=p[:]#/self.CellRad**
+            ThisNzt[:]*=n_z
             ThisX=[]
             ThisY=[]
             LNzt=[]
             
+            CD=GeneDist.ClassDistMachine()
+            CD.setRefSampleIrregular(np.arange(Ns),W=Pz[:,iSlice])
+            CD.setRefSampleIrregular(np.arange(Ns),W=self.CM.DicoDATA["DicoSelFunc"]["P_Di_z"][:,iSlice])
+            #CD.setRefSampleIrregular(np.arange(Ns),W=n_ztReal[:,iSlice])
+            
+            pylab.figure("SimSample")
+            pylab.clf()
+            pylab.subplot(1,2,1)
+            CD.GIrr.Plot()
+            pylab.subplot(1,2,2)
+
+            # pylab.figure("n_zt")
+            # pylab.clf()
+            # pylab.plot(n_ztReal.T,color="gray")
+            # pylab.plot(ThisNzt,color="black")
+            # pylab.draw()
+            # pylab.show(block=False)
+            # pylab.pause(0.1)
+
+            
             # if iSlice>0: continue
             for i in range(self.NPix):
+                # log.print("%i/%i"%(i,self.NPix))
                 for j in range(self.NPix):
                     #if i!=j: continue
 
@@ -263,14 +309,26 @@ class ClassRunLM_Cov():
                     #N=10
                     self.NCube[iSlice,ii,jj]=N
                     for iObj in range(N):
+                        #iii=np.int64(CD.GiveSample(1)[0])
+                        #ThisNzt=n_ztReal[iii,:]
+                        iii=np.int64(np.random.rand(1)[0]*indZ.size)
+                        ThisNzt=n_ztReal[indZ[iii],:]
+                        #ThisNzt=Pz[indZ[iii],:]
+                        pylab.plot(zm,ThisNzt,color="gray",alpha=0.5)
+                        # stop
                         #print(ii,jj)
                         X.append(ii)
                         Y.append(jj)
                         ThisX.append(ii)
                         ThisY.append(jj)
-                        n_zt.append(ThisNzt.copy()/self.CellRad**2)
-                        LNzt.append(ThisNzt.copy()/self.CellRad**2)
+                        n_zt.append(ThisNzt.copy())#/self.CellRad**2)
+                        LNzt.append(ThisNzt.copy())#/self.CellRad**2)
                         LP.append(ThisNzt.copy())
+            if len(LNzt)>0:
+                pylab.plot([zm[iSlice],zm[iSlice]],[0,np.max(np.array(LNzt))],ls="--",color="black")
+            pylab.draw()
+            pylab.show(block=False)
+            pylab.pause(0.1)
             ThisX=np.float32(np.array(ThisX))
             ThisY=np.float32(np.array(ThisY))
             
@@ -294,17 +352,27 @@ class ClassRunLM_Cov():
         #self.CM.Cat_s.n_zt*=10
         DicoSourceXY["X"]=X
         DicoSourceXY["Y"]=Y
-        DicoSourceXY["P"]=np.array(LP)
+        LP=np.array(LP)/np.sum(np.array(LP),axis=1).reshape((-1,1))
+        DicoSourceXY["P"]=LP
         n_zt=np.array(n_zt)
-        s=self.CM.Cat_s.n_zt[:]*self.CellRad**2*5
+        #s=self.CM.Cat_s.n_zt[:]*self.CellRad**2*5
+        #s=s/np.sum(s,axis=1).reshape((-1,1))
+        
         self.DicoSourceXY=DicoSourceXY
         xx=X+np.random.rand(X.size)-0.5
         yy=Y+np.random.rand(X.size)-0.5
+        self.DicoSourceXY["X"]=xx
+        self.DicoSourceXY["Y"]=yy
         for iSlice in range(self.GM.NSlice):
-            ax=GM.AxList[iSlice].scatter(xx,yy,c="red",s=s[:,iSlice],linewidth=0)
+            ax=GM.AxList[iSlice].scatter(xx,
+                                         yy,
+                                         c="red",
+                                         s=LP[:,iSlice]*3,
+                                         linewidth=0)
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
+
 
         #self.GM.PlotGammaCube(Cube=self.NCube,FigName="NCube")
 
@@ -352,8 +420,8 @@ class ClassRunLM_Cov():
             return L
         C=GeneDist.ClassDistMachine()
         #g.fill(0)
-        #g.flat[:]=np.random.randn(g.size)*0.1
-        #g.flat[:]=np.random.rand(g.size)*0.1
+        #g.flat[:]=np.random.randn(g.size)*0.1+10
+        #g.flat[:]=np.random.rand(g.size)*0.1+0.5
         g.flat[:]=np.random.randn(g.size)
         Alpha=1.
         # self.CLM.measure_dLdg(g)
@@ -369,20 +437,40 @@ class ClassRunLM_Cov():
         # self.CLM.buildFulldJdg(g)
         # return
 
+        # ############################################
         # from pyhmc import hmc
         # T=ClassTimeIt.ClassTimeIt()
         # r = hmc(self.CLM.logprob,
-        #               x0=g,
-        #               n_samples=int(10000.),
-        #               display=True,
-        #               epsilon=0.2,
-        #               return_diagnostics=True)
+        #         x0=g,
+        #         n_samples=int(10000.),
+        #         n_steps=2,
+        #         display=True,
+        #         epsilon=0.15,
+        #         return_diagnostics=True,
+        #         return_logp=True)
         # gArray=r[0]
         # gMean=np.mean(gArray,axis=0)
         # T.timeit("mcmc")
-        # PM.PlotHist(gMean,NTry=500,gArray=gArray)
-        # return
+        # PM.Plot(gMean,NTry=500,gArray=gArray,Force=True)
 
+        # PM.Plot(gMean,NTry=500,FullHessian=True,Force=True)
+        # import pylab
+        # pylab.figure("LL")
+
+        # pylab.subplot(1,2,1)
+        # pylab.plot(r[1])
+
+        # from pyhmc import autocorr1
+        # A1=autocorr1.integrated_autocorr1(gArray)
+        # pylab.subplot(1,2,2)
+        # pylab.plot(A1)
+        
+        # pylab.draw()
+        # pylab.show(False)
+        # np.save("gArray.npy",gArray)
+        # return gMean
+        # ##########################################
+        
         L_L=[L]
         L_dL=[]
         PM.L_L=L_L
@@ -407,6 +495,7 @@ class ClassRunLM_Cov():
             if Alpha<1e-7 or HasConverged:
                 log.print(ModColor.Str("STOP"))
                 PM.Plot(g,NTry=500,Force=True)
+                PM.Plot(g,NTry=500,FullHessian=True,Force=True)
                 return g
             if L<L_L[-1]:
                 log.print(ModColor.Str("Things are getting worse"))
@@ -430,11 +519,11 @@ class ClassRunLM_Cov():
                 if dL!=0 and len(L_dL)>20:
                     Mean_dL=np.mean(np.array(L_dL)[-10:])
                     log.print("  Mean_dL=%f"%Mean_dL)
-                    if Mean_dL<0.01:
+                    if Mean_dL<0.1:
                         log.print(ModColor.Str("Likelihood does not improve anymore"))
                         HasConverged=True
                     
-                if (iStep+1)%100==0:
+                if (iStep+1)%25==0:
                     log.print(ModColor.Str("increasing Alpha: %f -> %f"%(Alpha,Alpha*factAlpha),col="green"))
                     Alpha*=factAlpha
                     
