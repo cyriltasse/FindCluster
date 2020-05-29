@@ -10,7 +10,7 @@ import matplotlib.pyplot as pylab
 import ClassMassFunction
 from astropy.cosmology import WMAP9 as cosmo
 from DDFacet.Other import logger
-log = logger.getLogger("RunMCMC")
+log = logger.getLogger("ClassRunLM")
 
 from DDFacet.Other import ModColor
 from DDFacet.Other import ClassTimeIt
@@ -33,6 +33,8 @@ import scipy.optimize
 import GeneDist
 import ClassPlotMachine
 
+import ClassCovMatrix_Sim3D_2 as ClassCovMatrixMachine
+
 # # ##############################
 # # Catch numpy warning
 # np.seterr(all='raise')
@@ -40,26 +42,41 @@ import ClassPlotMachine
 # warnings.filterwarnings('error')
 # #with warnings.catch_warnings():
 # #    warnings.filterwarnings('error')
+import warnings
+warnings.filterwarnings("ignore")
 # # ##############################
 
-def test(DoPlot=False,ComputeInitCube=False):
+def test(DoPlot=False):
     pylab.close("all")
     rac_deg,decc_deg=241.20678,55.59485 # cluster
     FOV=0.15
-    FOV=0.05
     FOV=0.2
-#    FOV=0.1
-#    FOV=0.05
-#    FOV=0.02
+    CellDeg=0.002
+    NPix=int(FOV/CellDeg)
+    if (NPix%2)!=0:
+        NPix+=1
+    log.print("Choosing NPix=%i"%NPix)
 
     SubField={"rac_deg":rac_deg,
               "decc_deg":decc_deg,
-              "FOV":FOV,
-              "CellDeg":0.002}
+              "NPix":NPix,
+              "CellDeg":CellDeg}
+    CM=ClassCatalogMachine.ClassCatalogMachine()
+    CM.Init()
+    CM.Recompute_nz_nzt()
+        
+    CACM=ClassCovMatrixMachine.ClassAngularCovMat(CellDeg,NPix,CM.zg_Pars)
+    CACM.initCovMatrices()
+    DicoCov=CACM.DicoCov
+    
+    logger.setSilent(["ClassEigenSW",
+                      "ClassAndersonDarling"])
+    
     LMMachine=ClassRunLM_Cov(SubField,
-                             DoPlot=DoPlot,
-                             ComputeInitCube=ComputeInitCube)
-
+                             CM,
+                             DicoCov,
+                             DoPlot=DoPlot)
+    
     
     # LMMachine.testJacob()
     # return
@@ -86,32 +103,27 @@ def g_z(z):
 class ClassRunLM_Cov():
     def __init__(self,
                  SubField,
+                 CM,
+                 DicoCov,
                  DoPlot=False,
                  NCPU=56,
-                 ComputeInitCube=True,
                  BasisType="Cov",
-                 ScaleKpc=100.):
+                 ScaleKpc=100.,PlotID=None):
+        self.PlotID=PlotID
         self.NCPU=NCPU
         self.DoPlot=DoPlot
         self.rac_deg,self.decc_deg=SubField["rac_deg"],SubField["decc_deg"]
         self.rac,self.decc=self.rac_deg*np.pi/180,self.decc_deg*np.pi/180
-        self.FOV=SubField["FOV"]
         self.CellDeg=SubField["CellDeg"]
         self.CellRad=self.CellDeg*np.pi/180
+        self.NPix=SubField["NPix"]
         np.random.seed(42)
-        self.NPix=int(self.FOV/self.CellDeg)
-        if (self.NPix%2)!=0:
-            self.NPix+=1
+        self.CM=CM
         
-        # self.NPix=11
-        log.print("Choosing NPix=%i"%self.NPix)
         
-        self.CM=ClassCatalogMachine.ClassCatalogMachine()
-        self.CM.Init()
-        # self.CM.PlotPzZSPEC()
-        self.CM.Recompute_nz_nzt()
+        self.DicoSourceXY=None
         
-        self.CM.cutCat(self.rac,self.decc,self.NPix,self.CellRad)
+        
         self.zParms=self.CM.zg_Pars
         self.NSlice=self.zParms[-1]-1
         self.logMParms=self.CM.logM_Pars
@@ -123,8 +135,7 @@ class ClassRunLM_Cov():
         G=np.cumsum(g)
         G/=G[-1]
         self.DistMachine.setCumulDist(z,G)
-
-        self.CLM=ClassLikelihoodMachine.ClassLikelihoodMachine(self.CM)
+        self.CLM=ClassLikelihoodMachine.ClassLikelihoodMachine(self.CM,SubField)
         self.CLM.MassFunction.setGammaGrid((self.CM.rac_main,self.CM.decc_main),
                                            (self.rac,self.decc),
                                            self.CellDeg,
@@ -132,71 +143,23 @@ class ClassRunLM_Cov():
                                            zParms=self.zParms,
                                            ScaleKpc=ScaleKpc)
         self.GM=self.CLM.MassFunction.GammaMachine
+        self.GM.setCovMat(DicoCov)
+        
+        #self.DicoChains = shared_dict.create("DicoChains")
 
-        # CLM.showRGB()
-        #self.CLM.ComputeIndexCube(self.NPix)
-
-
-        # self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CLM,ScaleKpc=[200.,500.])
-        self.CIGC=ClassInitGammaCube.ClassInitGammaCube(self.CM,self.GM,ScaleKpc=[ScaleKpc])
-        self.DicoChains = shared_dict.create("DicoChains")
-
-        # ###########################
-        # self.finaliseInit()
-        # ###########################
-
-        self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
+        # self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
 
         self.XSimul=None
-        self.simulCat()
+        # self.simulCat()
         
         self.CLM.ComputeIndexCube(self.NPix)
         self.MoveType="Stretch"
         
         
-
-        # self.InitCube(Compute=ComputeInitCube)
-        
-        # self.CLM.InitDiffMatrices()
         
     
 
         
-    def finaliseInit(self):
-        self.CIGC.finaliseInit()
-        APP.registerJobHandlers(self)
-        AsyncProcessPool.init(ncpu=self.NCPU,
-                              affinity=0)
-        APP.startWorkers()
-
-        
-    def InitCube(self,Compute=False):
-        log.print("Initialise GammaCube...")
-        if Compute:
-            if "EffectiveOmega" not in self.CIGC.DicoCube.keys():
-                self.CIGC.computeEffectiveOmega()
-            Cube=self.CIGC.InitGammaCube()
-            np.save("Cube",Cube)
-        else:
-            Cube=np.load("Cube.npy")
-
-        
-        self.CubeInit=Cube.copy()
-        self.DicoChains["CubeInit"]=self.CubeInit
-            
-        CubeInit=self.DicoChains["CubeInit"]
-        #CubeInit=np.random.randn(*(self.DicoChains["CubeInit"].shape))*0.0001+1
-        
-
-        CubeInit[CubeInit<0.]=0.
-#        if self.DoPlot: self.GM.PlotGammaCube(Cube=CubeInit,FigName="Measured")
-        X=self.GM.CubeToVec(CubeInit)
-        
-#        self.CLM.MassFunction.updateGammaCube(X)
-#        if self.DoPlot: self.GM.PlotGammaCube()
-
-        self.NDim=self.CLM.MassFunction.GammaMachine.NParms
-        self.X=np.float64(X)
 
     def simulCat(self):
         log.print("Simulating catalog...")
@@ -294,6 +257,7 @@ class ClassRunLM_Cov():
                 # log.print("%i/%i"%(i,self.NPix))
                 for j in range(self.NPix):
                     #if i!=j: continue
+                    if GM.ThisMask[i,j]: continue
 
                     n=n_z[iSlice]*GammaSlice[i,j]*self.CellRad**2
                     
@@ -344,18 +308,18 @@ class ClassRunLM_Cov():
         
         X=np.array(X)
         Y=np.array(Y)
-        self.CM.Cat_s=np.zeros((X.size,),self.CM.Cat_s.dtype)
-        self.CM.Cat_s=self.CM.Cat_s.view(np.recarray)
-        self.CM.Cat_s.xCube[:]=np.round(Y[:])
-        self.CM.Cat_s.yCube[:]=np.round(X[:])
-        self.CM.Cat_s.n_zt[:]=n_zt
-        #self.CM.Cat_s.n_zt*=10
+        self.CLM.Cat_s=np.zeros((X.size,),self.CLM.Cat_s.dtype)
+        self.CLM.Cat_s=self.CLM.Cat_s.view(np.recarray)
+        self.CLM.Cat_s.xCube[:]=np.round(Y[:])
+        self.CLM.Cat_s.yCube[:]=np.round(X[:])
+        self.CLM.Cat_s.n_zt[:]=n_zt
+        #self.CLM.Cat_s.n_zt*=10
         DicoSourceXY["X"]=X
         DicoSourceXY["Y"]=Y
         LP=np.array(LP)/np.sum(np.array(LP),axis=1).reshape((-1,1))
         DicoSourceXY["P"]=LP
         n_zt=np.array(n_zt)
-        #s=self.CM.Cat_s.n_zt[:]*self.CellRad**2*5
+        #s=self.CLM.Cat_s.n_zt[:]*self.CellRad**2*5
         #s=s/np.sum(s,axis=1).reshape((-1,1))
         
         self.DicoSourceXY=DicoSourceXY
@@ -369,12 +333,14 @@ class ClassRunLM_Cov():
                                          c="red",
                                          s=LP[:,iSlice]*3,
                                          linewidth=0)
+            #GM.AxList[iSlice].imshow(GM.ThisMask)
         pylab.draw()
         pylab.show(block=False)
         pylab.pause(0.1)
+        
+        
 
-
-        #self.GM.PlotGammaCube(Cube=self.NCube,FigName="NCube")
+#        self.GM.PlotGammaCube(Cube=np.array([GM.ThisMask for i in range(self.NSlice)]),FigName="Mask")
 
     def testJacob(self):
         g=np.random.randn(self.GM.NParms)
@@ -398,7 +364,7 @@ class ClassRunLM_Cov():
         PM=ClassPlotMachine.ClassPlotMachine(self.CLM,
                                              XSimul=self.XSimul,
                                              DicoSourceXY=self.DicoSourceXY,
-                                             StepPlot=100)
+                                             StepPlot=100,PlotID=self.PlotID)
         self.PM=PM
         # g.fill(0)
         # log.print("True Likelihood = %.5f"%(self.CLM.L(g)))
@@ -422,7 +388,7 @@ class ClassRunLM_Cov():
         #g.fill(0)
         #g.flat[:]=np.random.randn(g.size)*0.1+10
         #g.flat[:]=np.random.rand(g.size)*0.1+0.5
-        g.flat[:]=np.random.randn(g.size)
+        g.flat[:]=np.random.randn(g.size)*3
         Alpha=1.
         # self.CLM.measure_dLdg(g)
         # self.CLM.measure_dJdg(g)
@@ -485,8 +451,10 @@ class ClassRunLM_Cov():
             #     T.timeit("Plot Gamma Cube")
             # self.CLM.measure_dLdg(g)
             # stop
+            
             T.timeit("Plot")
             L=self.CLM.logP(g)
+            
             log.print("Likelihood = %.5f"%(L))
             T.timeit("Compute L")
             UpdateX=True
@@ -495,8 +463,8 @@ class ClassRunLM_Cov():
             if Alpha<1e-7 or HasConverged:
                 log.print(ModColor.Str("STOP"))
                 PM.Plot(g,NTry=500,Force=True)
-                PM.Plot(g,NTry=500,FullHessian=True,Force=True)
-                return g
+                # PM.Plot(g,NTry=500,FullHessian=True,Force=True)
+                return g,self.PM.MedianCube,self.PM.SigmaCube
             if L<L_L[-1]:
                 log.print(ModColor.Str("Things are getting worse"))
                 log.print(ModColor.Str("   decreasing Alpha: %f -> %f"%(Alpha,Alpha/factAlpha)))
@@ -519,7 +487,7 @@ class ClassRunLM_Cov():
                 if dL!=0 and len(L_dL)>20:
                     Mean_dL=np.mean(np.array(L_dL)[-10:])
                     log.print("  Mean_dL=%f"%Mean_dL)
-                    if Mean_dL<0.1:
+                    if Mean_dL<10.3:
                         log.print(ModColor.Str("Likelihood does not improve anymore"))
                         HasConverged=True
                     

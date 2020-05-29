@@ -16,7 +16,7 @@ from ClassShapiroWilk import *
 from ClassEigenShapiroWilk import *
 
 class ClassLikelihoodMachine():
-    def __init__(self,CM):
+    def __init__(self,CM,SubField):
         self.CM=CM
         
         self.zParms=self.CM.zg_Pars
@@ -26,7 +26,13 @@ class ClassLikelihoodMachine():
         self.MassFunction=ClassMassFunction.ClassMassFunction()
         
         self.MassFunction.setSelectionFunction(self.CM)
-
+        
+        self.rac_deg,self.decc_deg=SubField["rac_deg"],SubField["decc_deg"]
+        self.rac,self.decc=self.rac_deg*np.pi/180,self.decc_deg*np.pi/180
+        self.CellDeg=SubField["CellDeg"]
+        self.CellRad=self.CellDeg*np.pi/180
+        self.NPix=SubField["NPix"]
+        self.Cat_s=self.CM.giveCutCat(self.rac,self.decc,self.NPix,self.CellRad)
         self.NSlice=self.zParms[-1]-1
         self.MAP=1
         
@@ -35,15 +41,15 @@ class ClassLikelihoodMachine():
 
     def ComputeIndexCube(self,NPix):
         self.NPix=NPix
-        self.IndexCube=np.array([i*np.int64(NPix**2)+np.int64(self.CM.Cat_s.xCube*NPix)+np.int64(self.CM.Cat_s.yCube) for i in range(self.NSlice)]).flatten()
+        self.IndexCube=np.array([i*np.int64(NPix**2)+np.int64(self.Cat_s.xCube*NPix)+np.int64(self.Cat_s.yCube) for i in range(self.NSlice)]).flatten()
         
-        X,Y=self.CM.Cat_s.xCube,self.CM.Cat_s.yCube
+        X,Y=self.Cat_s.xCube,self.Cat_s.yCube
         
         # # X=np.int64(np.random.rand(X.size)*NPix)
         # # Y=np.int64(np.random.rand(X.size)*NPix)
         # # X.fill(NPix//2)
         # # Y.fill(NPix//2)
-        self.MassFunction.GammaMachine.ThisMask.fill(0)
+        # self.MassFunction.GammaMachine.ThisMask.fill(0)
         
         self.IndexCube_xy_Slice=(np.int64(X*NPix)+np.int64(Y)).flatten()
         indy,indx=np.where(self.MassFunction.GammaMachine.ThisMask==0)
@@ -259,9 +265,9 @@ class ClassLikelihoodMachine():
         g=g0.reshape((-1,1))
         L_SqrtCov=GM.L_SqrtCov
         L_NParms=GM.L_NParms
-        Ns=self.CM.Cat_s.shape[0]
+        Ns=self.Cat_s.shape[0]
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
-        n_zt=self.CM.Cat_s.n_zt
+        n_zt=self.Cat_s.n_zt
 
         TypeSum=np.float64
         #TypeSum=np.float32
@@ -319,9 +325,9 @@ class ClassLikelihoodMachine():
         L_SqrtCov=GM.L_SqrtCov
         L_NParms=GM.L_NParms
         NParms=GM.NParms
-        Ns=self.CM.Cat_s.shape[0]
+        Ns=self.Cat_s.shape[0]
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
-        n_zt=self.CM.Cat_s.n_zt
+        n_zt=self.Cat_s.n_zt
 
         # Sum_z_Ax_1_z=np.sum(self.Ax_1_z,axis=0)
 
@@ -386,9 +392,9 @@ class ClassLikelihoodMachine():
         L_SqrtCov=GM.L_SqrtCov
         L_NParms=GM.L_NParms
         NParms=GM.NParms
-        Ns=self.CM.Cat_s.shape[0]
+        Ns=self.Cat_s.shape[0]
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
-        n_zt=self.CM.Cat_s.n_zt
+        n_zt=self.Cat_s.n_zt
 
         # Sum_z_Ax_1_z=np.sum(self.Ax_1_z,axis=0)
         L_Ax_1_z=[]
@@ -451,9 +457,9 @@ class ClassLikelihoodMachine():
         L_SqrtCov=GM.L_SqrtCov
         L_NParms=GM.L_NParms
         NParms=GM.NParms
-        Ns=self.CM.Cat_s.shape[0]
+        Ns=self.Cat_s.shape[0]
         n_z=self.CM.DicoDATA["DicoSelFunc"]["n_z"]
-        n_zt=self.CM.Cat_s.n_zt
+        n_zt=self.Cat_s.n_zt
 
         # Sum_z_Ax_1_z=np.sum(self.Ax_1_z,axis=0)
         L_Ax_1_z=[]

@@ -130,17 +130,17 @@ class ClassAndersonDarlingMachine():
         Pm=self.empirical_PA2
         Pfit=self.logP_A2
         
-        fig=pylab.figure("logP-A2")
-        fig.clf()
-        # pylab.subplot(2,2,1)
-        # pylab.plot(Fm.x,Fm.y)
-        # pylab.xlim(0,100)
-        # pylab.subplot(2,2,2)
-        pylab.scatter(Pm.x,np.log(Pm.y),color="black",alpha=0.5)#,edgecolors="black")
-        pylab.plot(Pm.x,Pfit(Pm.x),color="black",ls="--")
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
+        # fig=pylab.figure("logP-A2")
+        # fig.clf()
+        # # pylab.subplot(2,2,1)
+        # # pylab.plot(Fm.x,Fm.y)
+        # # pylab.xlim(0,100)
+        # # pylab.subplot(2,2,2)
+        # pylab.scatter(Pm.x,np.log(Pm.y),color="black",alpha=0.5)#,edgecolors="black")
+        # pylab.plot(Pm.x,Pfit(Pm.x),color="black",ls="--")
+        # pylab.draw()
+        # pylab.show(block=False)
+        # pylab.pause(0.1)
 
     # #########################
     def giveA2(self,X):

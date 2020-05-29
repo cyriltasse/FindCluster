@@ -19,11 +19,14 @@ import pydtfe
 
 from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 from DDFacet.Other import AsyncProcessPool
+from DDFacet.Other import MyPickle
 from DDFacet.Array import shared_dict
 import plotly.graph_objects as go
 from scipy import interpolate
 import scipy.stats
-
+import ClassCatalogMachine
+import os
+from DDFacet.Array import ModLinAlg
 
 def Sigmoid(x,a=None,MaxVal=None):
     return MaxVal*1./(1.+np.exp(-a*x))
@@ -32,10 +35,22 @@ def logit(x0,a=None,MaxVal=None):
     x=x0/MaxVal
     return 1./a*np.log(x/(1.-x))
 
+def computeAngularCovMat(FOV=0.05,CellDeg=0.002):
+    
+    NPix=int(FOV/CellDeg)
+    if (NPix%2)!=0:
+        NPix+=1
+    log.print("Choosing NPix=%i"%NPix)
+    CM=ClassCatalogMachine.ClassCatalogMachine()
+    CM.Init()
+    
+    CACM=ClassAngularCovMat(CellDeg,NPix,CM.zg_Pars)
+    CACM.initCovMatrices()
+
 def measureCovMat():
     CCM=ClassCovMatrix(ReComputeFromSim=True)
     CCM.buildFromCatalog()
-    #CCM.MeasureCovInMap()
+    CCM.MeasureCovInMap()
     # CellSizeRad=0.001*np.pi/180
     # zz=np.linspace(0.01,1.5,10)
     # for z in zz:
@@ -50,7 +65,189 @@ def PlotCovMat():
     zz=np.linspace(0.01,1.5,10)
     for z in zz:
         CCM.giveCovMat(CellSizeRad=CellSizeRad,NPix=50,zm=z)
-    
+
+# ############################################
+# ############################################
+# ############################################
+
+class ClassAngularCovMat():
+    def __init__(self,
+                 CellDeg,
+                 NPix,
+                 zParms):
+        self.CellDeg=CellDeg
+        self.NPix=NPix
+        self.CellRad=CellDeg*np.pi/180
+        self.zg=np.linspace(*zParms)
+        self.NSlice=zParms[-1]-1
+        self.Mode="Sim3D"
+        self.DicoCovSVD = shared_dict.create("DicoCovSVD")
+
+    def initCovMatrices(self,
+                        ScaleFWHMkpc=100.):
+        
+        FileOut="Cov_%s_%ikpc.DicoCov"%(self.Mode,ScaleFWHMkpc)
+        
+        Parms={"CellDeg":self.CellDeg,
+               "NPix":self.NPix,
+               "CellRad":self.CellRad,
+               "zg":self.zg.tolist()}
+        
+        if os.path.isfile(FileOut):
+            log.print("Loading %s..."%FileOut)
+            DicoSave=MyPickle.Load(FileOut)
+            if DicoSave["Parms"]==Parms:
+                log.print("   all parameters are the same... ")
+                self.MaxValueSigmoid=DicoSave["MaxValueSigmoid"]
+                self.a_Sigmoid=DicoSave["a_Sigmoid"]
+                self.ScaleCov=DicoSave["ScaleCov"]
+                self.L_SqrtCov=DicoSave["L_SqrtCov"]
+                self.L_NParms=DicoSave["L_NParms"]
+                self.L_Hinv=DicoSave["L_Hinv"]
+                self.L_ssqs=DicoSave["L_ssqs"]
+                self.NParms=np.sum(self.L_NParms)
+                log.print("Number of free parameters %i"%self.NParms)
+                log.print("  with ScaleCov=%s"%self.ScaleCov)
+                self.DicoCov=DicoSave
+                return
+            
+        APP.registerJobHandlers(self)
+        AsyncProcessPool.init(ncpu=0,#self.NCPU,
+                              affinity=0)
+        APP.startWorkers()
+
+        f=2.*np.sqrt(2.*np.log(2.))
+        Sig_kpc=ScaleFWHMkpc/f
+        self.L_SqrtCov=[]
+        self.L_Hinv=[]
+        self.L_ssqs=[]
+        self.L_NParms=[]
+        
+        for iz in range(self.NSlice):
+            APP.runJob("_computeSVD:%i"%(iz),
+                       self._computeSVD,
+                       args=(iz,Sig_kpc))#,serial=True)
+
+        APP.awaitJobResults("_computeSVD:*", progress="Compute SqrtCov")
+        self.DicoCovSVD.reload()
+        for iz in range(self.NSlice):
+            sqrtCs=(self.DicoCovSVD["sqrtCs_%i"%iz].copy())
+            self.L_Hinv.append(self.DicoCovSVD["Hinv_%i"%iz].copy())
+            self.L_ssqs.append(self.DicoCovSVD["ssqs_%i"%iz].copy())
+            self.L_SqrtCov.append(sqrtCs)
+            self.L_NParms.append(sqrtCs.shape[1])
+        self.NParms=np.sum(self.L_NParms)
+        log.print("Number of free parameters %i"%self.NParms)
+        
+        DicoSave={"Parms":Parms,
+                  "ScaleCov":self.DicoCovSVD["ScaleCov_%i"%iz],
+                  "a_Sigmoid":self.DicoCovSVD["a_Sigmoid_%i"%iz],
+                  "MaxValueSigmoid":self.DicoCovSVD["MaxValueSigmoid_%i"%iz],
+                  "L_SqrtCov":self.L_SqrtCov,
+                  "L_ssqs":self.L_ssqs,
+                  "L_NParms":self.L_NParms,
+                  "L_Hinv":self.L_Hinv}
+        self.ScaleCov=DicoSave["ScaleCov"]
+        self.a_Sigmoid=DicoSave["a_Sigmoid"]
+        self.MaxValueSigmoid=DicoSave["MaxValueSigmoid"]
+        log.print("Saving sqrt(Cov) in %s"%FileOut)
+        MyPickle.Save(DicoSave,FileOut)
+        self.DicoCov=DicoSave
+        
+    def toSparse(self,C,Th=1e-2):
+        Ca=np.abs(C)
+        indi,indj=np.where(Ca>Th*Ca.max())
+        data=C[indi,indj]
+        M=C.shape[0]
+        Cs=scipy.sparse.coo_matrix((data, (indi, indj)), shape=(M, M))
+        S=Cs.size/M**2
+        return Cs,S
+
+    def _computeSVD(self,iz,Sig_kpc):
+        z0,z1=self.zg[iz],self.zg[iz+1]
+        zm=(z0+z1)/2.
+        SigmaRad=Sig_kpc*cosmo.arcsec_per_kpc_comoving(zm).to_value()/(3600.)*np.pi/180
+        self.Scale_Cov_X=None
+        if self.Mode=="Gauss":
+            stop
+            CCM=ClassCovMatrix_Gauss.ClassCovMatrix()
+            C=CCM.giveCovMat(CellSizeRad=self.CellRad,
+                             NPix=self.NPix,
+                             zm=zm,
+                             SigmaPix=SigmaRad/self.CellRad)
+            
+        elif self.Mode=="Sim3D":
+            CCM=ClassCovMatrix()
+            C=CCM.giveCovMat(CellSizeRad=self.CellRad,
+                             NPix=self.NPix,
+                             zm=zm)
+            
+            #self.Scale_Cov_X="log"C.Scale_Cov_X
+
+        #print(":!::")
+        #C=np.eye(self.NPix**2,self.NPix**2)
+        Cs,Sparsity=self.toSparse(C)
+        M=C.shape[0]
+        log.print("  Non-zeros are %.1f%% of the matrix size [%ix%i]"%(Sparsity*100,M,M))
+        self.Cs=Cs
+        CellSize=1.
+        A=(CellSize*M)**2
+        # k=np.max([A/Sig**2,1.])
+        # k=int(k*3)
+        k=M-1#int(np.min([M-1,k]))
+        log.print("Choosing k=%i [M=%i]"%(k,M))
+        self.k=k
+        #print(":!::")
+        #Us,ss,Vs=scipy.sparse.linalg.svds(Cs,k=k)
+        Us,ss,Vs=np.linalg.svd(C)
+
+        sss=ss[ss>0]
+        log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
+        ssqs=np.sqrt(ss)
+        
+        ind=np.where(ssqs>0)[0]
+        ind=np.where(ssqs>1e-2*ssqs.max())[0]
+        S0=Us.shape
+
+        Us=Us[:,ind]
+        ssqs=ssqs.flat[ind]
+        A= sqrtCs =Us*ssqs.reshape(1,ssqs.size)
+        # print(S0,Us.shape,ssqs.shape)
+        
+        Hinv=ModLinAlg.invSVD((A.T).dot(A))
+
+        self.DicoCovSVD["sqrtCs_%i"%iz]=A
+        self.DicoCovSVD["ssqs_%i"%iz]=ssqs
+        self.DicoCovSVD["Hinv_%i"%iz]=Hinv
+        self.DicoCovSVD["MaxValueSigmoid_%i"%iz]=CCM.MaxValueSigmoid
+        self.DicoCovSVD["ScaleCov_%i"%iz]=CCM.ScaleCov
+        self.DicoCovSVD["a_Sigmoid_%i"%iz]=CCM.a_Sigmoid
+            
+    def CubeToVec(self,Cube):
+        ii=0
+        Cube=self.TypeCube(Cube.copy())
+        XOut=np.zeros((self.NParms,),np.float32)
+        for iSlice in range(self.NSlice):
+            N=self.L_NParms[iSlice]
+            if N==0: continue
+            Slice=Cube[iSlice].copy()
+            Slice[Slice==0]=1e-6
+            #y=Slice.reshape((-1,1))-1.
+            if self.ScaleCov=="log":
+                y=np.log(Slice.reshape((-1,1)))
+            elif self.ScaleCov=="Sigmoid":
+                y=ClassCovMatrix_Sim3D_2.Logit(x,a_Sigmoid=self.a_Sigmoid,MaxVal=self.MaxValueSigmoid)
+            A=self.L_SqrtCov[iSlice]
+            x0=(A.T).dot(y)
+            Hinv=self.L_Hinv[iSlice]#ModLinAlg.invSVD((A.T).dot(A))
+            x=np.dot(Hinv,x0)
+            # print(np.mean(np.abs(x.imag)) / np.mean(np.abs(x.real)))
+            XOut[ii:ii+N]=(x.real.ravel())[:]
+            ii+=N
+        return XOut
+
+
+
 class ClassCovMatrix():
     def __init__(self,
                  ReComputeFromSim=False):
@@ -61,7 +258,6 @@ class ClassCovMatrix():
             self.finaliseInit()
         
     def finaliseInit(self):
-        APP.registerJobHandlers(self)
         AsyncProcessPool.init(ncpu=self.NCPU,
                               affinity=0)
         APP.startWorkers()
@@ -128,6 +324,7 @@ class ClassCovMatrix():
         x_m, y_m, z_m = np.meshgrid(R, R, R)
         
         Im=pydtfe.map_dtfe3d(Xp,Yp,Zp,x_m, y_m, z_m)
+        
         log.print("    done!")
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         Im[np.isnan(Im)]=0.

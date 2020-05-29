@@ -43,7 +43,11 @@ import ClassShapiroWilk
 class ClassPlotMachine():
     def __init__(self,
                  CLM,
-                 XSimul=None,StepPlot=100,DicoSourceXY=None):
+                 XSimul=None,
+                 StepPlot=100,
+                 DicoSourceXY=None,
+                 PlotID=None):
+        self.PlotID=PlotID
         self.DicoSourceXY=DicoSourceXY
         self.CLM=CLM
         self.GM=CLM.MassFunction.GammaMachine
@@ -53,17 +57,22 @@ class ClassPlotMachine():
         self.iFig=0
         self.iCall=0
         self.StepPlot=StepPlot
-        os.system("rm *.png")
+        os.system("rm *.png 2>/dev/null")
+        self.LTrue=None
+        self.XSimul=None
         if XSimul is not None:
             self.LTrue=self.CLM.logP(XSimul)
             log.print("Set XSimul with L=%f"%self.LTrue)
             self.XSimul=XSimul
             self.CubeSimul=self.GM.giveGammaCube(self.XSimul,ScaleCube=self.ScaleCube)
-            P=self.CubeSimul.copy()
-            P.fill(np.nan)
-            self.GM.PlotGammaCube(Cube=P,FigName="Points",
-                                  DicoSourceXY=DicoSourceXY)
-            self.SaveFig()
+            for iSlice in range(self.GM.NSlice):
+                self.CubeSimul[iSlice][self.GM.ThisMask==1]=0.
+                
+            # P=self.CubeSimul.copy()
+            # P.fill(np.nan)
+            # self.GM.PlotGammaCube(Cube=P,FigName="Points",
+            #                       DicoSourceXY=DicoSourceXY)
+            # self.SaveFig()
             self.GM.PlotGammaCube(Cube=self.CubeSimul,FigName="Simul LogCube",
                                   DicoSourceXY=DicoSourceXY)
             self.SaveFig()
@@ -71,16 +80,52 @@ class ClassPlotMachine():
     def Plot(self,g,NTry=100,Force=False,FullHessian=False,gArray=None):
         if (self.iCall%self.StepPlot==0) or Force:
             log.print("Call %i... plotting"%self.iCall)
+            self.giveGammaStat(g,
+                               NTry=NTry,
+                               gArray=gArray,
+                               FullHessian=FullHessian)
             self.PlotHist(g,
                           NTry=NTry,
                           FullHessian=FullHessian,
                           gArray=gArray)
+            self.PlotBest(g)
             #self.PlotHistEigen(g)
             self.PlotLogDiff(g)
             self.iFig+=1
         self.iCall+=1
 
+
+    def PlotBest(self,g):
+        CubeBest=self.GM.giveGammaCube(g,ScaleCube=self.ScaleCube)
+        for iSlice in range(self.GM.NSlice):
+            CubeBest[iSlice][self.GM.ThisMask==1]=np.nan
+
+        DicoSourceXY={}
+        DicoSourceXY["X"]=self.CLM.Cat_s.yCube
+        DicoSourceXY["Y"]=self.CLM.Cat_s.xCube
+        LP=self.CLM.Cat_s.n_zt
+        LP=np.array(LP)/np.sum(np.array(LP),axis=1).reshape((-1,1))
+        DicoSourceXY["P"]=LP
+
+        self.GM.PlotGammaCube(Cube=CubeBest,FigName="Best LogCube",DicoSourceXY=DicoSourceXY)
+        # for iSlice in range(self.GM.NSlice):
+        #     ax0=self.GM.AxList[iSlice]
+        #     s=DicoSourceXY["P"][:,iSlice]
+        #     rgba_colors = np.zeros((s.size,4))
+        #     rgba_colors[:,1:3] = 0
+        #     rgba_colors[:, 3] = s
+        #     Ns=self.CLM.Cat_s.xCube.size
+        #     dx=0#np.random.rand(Ns)-0.5
+        #     dy=0#np.random.rand(Ns)-0.5
+        #     ax0.scatter(DicoSourceXY["X"]+dx,DicoSourceXY["Y"]+dy,s=3, color=rgba_colors)#,c="black",2*s[:,iSlice])
+        # pylab.draw()
+        # pylab.show(block=False)
+        # pylab.pause(0.1)
+        self.SaveFig()
+        
+        
     def PlotLogDiff(self,g):
+        if self.XSimul is None: return
         CubeBest=self.GM.giveGammaCube(g,ScaleCube=self.ScaleCube)
         fig=pylab.figure("logDiff")
         cmap=pylab.cm.cubehelix
@@ -120,25 +165,13 @@ class ClassPlotMachine():
         pylab.show(block=False)
         pylab.pause(0.1)
         self.SaveFig()
-    
-    def PlotHist(self,g,NTry=100,gArray=None,FullHessian=False):
-        GM=self.GM
-        L_NParms=GM.L_NParms
-
-        L=self.CLM.logP(g)
-        #self.L_L.append(L)
-        LTrue=self.LTrue
-        L_L=self.L_L
         
-        C=GeneDist.ClassDistMachine()
-
+    def giveGammaStat(self,g,NTry=100,gArray=None,FullHessian=False):
         
-        
-        #Sig[Sig>1.]=1
-        # Sig=(1./np.abs(dJdg))
         if gArray is not None:
             NTry=gArray.shape[0]
         elif not FullHessian:
+            log.print("  using diagonal Hessian...")
             dJdg=self.CLM.d2logPdg2(g,Diag=True).flat[:]
             Sig=np.sqrt(1./np.abs(dJdg))#/2.
             gArray=np.array([g+Sig*np.random.randn(*g.shape) for iTry in range(NTry)])
@@ -169,13 +202,46 @@ class ClassPlotMachine():
             log.print("  creating random set...")
             gArray=np.array([ (g.flatten()+np.dot(sqrtCs,np.random.randn(ssqs.size,1)).flatten()) for iTry in range(NTry)])
             
-        ScaleCube=self.ScaleCube
         GammaStat=np.zeros((NTry,self.GM.NSlice,self.GM.NPix,self.GM.NPix),np.float32)
         for iTry in range(NTry):
-            GammaStat[iTry]=(self.GM.giveGammaCube(gArray[iTry],ScaleCube=ScaleCube))
+            GammaStat[iTry]=(self.GM.giveGammaCube(gArray[iTry],ScaleCube=self.ScaleCube))
+        self.GammaStat=GammaStat
 
-#        GammaStat[GammaStat<1e-10]=1e-10
+        Cube_q0=np.quantile(self.GammaStat,0.15e-2,axis=0)
+        Cube_q1=np.quantile(self.GammaStat,0.9985,axis=0)
+        self.SigmaCube=(Cube_q1-Cube_q0)/6.
+        self.MedianCube=np.quantile(self.GammaStat,0.5,axis=0)
+        self.GammaStat=GammaStat
+        
+        for iSlice in range(self.GM.NSlice):
+            self.MedianCube[iSlice][self.GM.ThisMask==1]=np.nan
+            self.SigmaCube[iSlice][self.GM.ThisMask==1]=np.nan
+
+        return GammaStat
+    
+    def PlotHist(self,g,NTry=100,gArray=None,FullHessian=False):
+        if self.XSimul is None: return
+        GM=self.GM
+        L_NParms=GM.L_NParms
+
+        L=self.CLM.logP(g)
+        #self.L_L.append(L)
+        LTrue=self.LTrue
+        L_L=self.L_L
+        
+        C=GeneDist.ClassDistMachine()
+        
+        GammaStat=self.GammaStat
+        
+        ScaleCube=self.ScaleCube
+
         CubeBest=self.GM.giveGammaCube(g,ScaleCube=ScaleCube)
+        for iSlice in range(self.GM.NSlice):
+            CubeBest[iSlice][self.GM.ThisMask==1]=0.
+            for iTry in range(NTry):
+                GammaStat[iTry,iSlice][self.GM.ThisMask==1]=0.
+
+        
         CubeSimul=self.CubeSimul
 
         Cube_mean=np.mean(GammaStat,axis=0)
@@ -187,11 +253,16 @@ class ClassPlotMachine():
             else:
                 s=slice(None)
             G=Gin[:,s,:,:]
+            
             C=GeneDist.ClassDistMachine()
             Cube_q0=np.quantile(G,q0,axis=0)
             Cube_q1=np.quantile(G,q1,axis=0)
+            
+            
             v0=Cube_q0.flatten()-CubeSimul[s,:,:].flatten()
             v1=Cube_q1.flatten()-CubeSimul[s,:,:].flatten()
+            v0=v0[v0!=0]
+            v1=v1[v1!=0]
             x0,y0=C.giveCumulDist(v0,Ns=1000,Norm=True)
             x1,y1=C.giveCumulDist(v1,Ns=1000,Norm=True)
             x=np.concatenate([x0,x1[::-1]])
@@ -200,6 +271,7 @@ class ClassPlotMachine():
             pylab.plot(x,y,color="black",alpha=0.2)
             if PlotMed:
                 v0=np.quantile(G,0.5,axis=0).flatten()-CubeSimul[s,:,:].flatten()
+                v0=v0[v0!=0]
                 x0,y0=C.giveCumulDist(v0,Ns=1000,Norm=True)
                 pylab.plot(x0,y0,ls="--",color="black")
                 
@@ -260,8 +332,8 @@ class ClassPlotMachine():
         # self.GM.PlotCumulDistX(g)
 
         vmm=[[self.CubeSimul[iSlice].min(),self.CubeSimul[iSlice].max()] for iSlice in range(self.CubeSimul.shape[0])]
-        self.GM.PlotGammaCube(Cube=CubeBest,FigName="Best LogCube",vmm=vmm)
-        self.SaveFig()
+        #self.GM.PlotGammaCube(Cube=CubeBest,FigName="Best LogCube",vmm=vmm)
+        #self.SaveFig()
         fact=1.8/2.
         figsize=(13/fact,8/fact)
         Nx,Ny=GiveNXNYPanels(self.GM.NSlice,ratio=figsize[0]/figsize[1])
@@ -304,13 +376,13 @@ class ClassPlotMachine():
             rgba_colors = np.zeros((s.size,4))
             rgba_colors[:,1:3] = 0
             rgba_colors[:, 3] = s
-            Ns=self.CLM.CM.Cat_s.xCube.size
+            Ns=self.CLM.Cat_s.xCube.size
             dx=0#np.random.rand(Ns)-0.5
             dy=0#np.random.rand(Ns)-0.5
             ax0.scatter(self.DicoSourceXY["X"]+dx,self.DicoSourceXY["Y"]+dy,s=3, color=rgba_colors)#,c="black",2*s[:,iSlice])
             
             # rgba_colors[:,1:3] = 1
-            #ax0.scatter(self.CLM.CM.Cat_s.xCube+dx,self.CLM.CM.Cat_s.yCube+dy,s=3, color=rgba_colors)#,c="black",2*s[:,iSlice])
+            #ax0.scatter(self.CLM.Cat_s.xCube+dx,self.CLM.Cat_s.yCube+dy,s=3, color=rgba_colors)#,c="black",2*s[:,iSlice])
             
             ax0.axis('off')
             ax0.set_xlim(0,self.GM.NPix)
@@ -409,7 +481,11 @@ class ClassPlotMachine():
         if fig is None:
             fig=pylab.gcf()
         fname=fig.get_label().replace(" ","_")
-        oname="%s_%4.4i.png"%(fname,self.iFig)
-
+        if self.PlotID is None:
+            oname="%s_%4.4i.png"%(fname,self.iFig)
+        else:
+            oname="%s_%s_%4.4i.png"%(self.PlotID,fname,self.iFig)
+            
+            
         log.print(ModColor.Str("Saving fig %s as %s"%(fname,oname),col="blue"))
         fig.savefig(oname)

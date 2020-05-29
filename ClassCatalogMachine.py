@@ -178,7 +178,6 @@ class ClassCatalogMachine():
             ind=np.where(Nfilt==n)[0]
             PChi2[ind]=scipy.stats.chi2.pdf(Chi2[ind],n)
         # PChi2.fill(1.)
-        pylab.figure("Probs")
 
         # P(z,M|Di)
         P_zm_Di=self.Cat.Pzm#/sPz.reshape((-1,1,1))
@@ -215,6 +214,7 @@ class ClassCatalogMachine():
 
         # # ###########################
         # # Plot ZSPEC
+        # pylab.figure("Probs")
         # pylab.clf()
         # ind=np.where(self.Cat.Z_SPEC>0)[0]
         # zSpec=self.Cat.Z_SPEC[ind]
@@ -292,18 +292,18 @@ class ClassCatalogMachine():
         #     pylab.pause(0.1)
 
     
-        pylab.figure("n_zt")
-        pylab.clf()
-        pylab.subplot(1,2,1)
-        pylab.imshow(P_zm,aspect="auto")
-        pylab.colorbar()
-        pylab.subplot(1,2,2)
-        pylab.plot(np.log10(n_zt[ind,:].T),color="gray",alpha=0.01)
-        #pylab.plot(np.log10(np.sum(n_zt,axis=0)),color="blue")
-        pylab.plot(np.log10(n_z),color="black")
-        pylab.draw()
-        pylab.show(block=False)
-        pylab.pause(0.1)
+        # pylab.figure("n_zt")
+        # pylab.clf()
+        # pylab.subplot(1,2,1)
+        # pylab.imshow(P_zm,aspect="auto")
+        # pylab.colorbar()
+        # pylab.subplot(1,2,2)
+        # pylab.plot(np.log10(n_zt[ind,:].T),color="gray",alpha=0.01)
+        # #pylab.plot(np.log10(np.sum(n_zt,axis=0)),color="blue")
+        # pylab.plot(np.log10(n_z),color="black")
+        # pylab.draw()
+        # pylab.show(block=False)
+        # pylab.pause(0.1)
 
     def PlotPzZSPEC(self):
         ind=np.where(self.Cat.Z_SPEC>0)[0]
@@ -515,6 +515,8 @@ class ClassCatalogMachine():
         self.OmegaTotal=self.DicoDATA["OmegaTotal"]
         self.setMask(self.DicoDATA["FileNames"]["MaskFitsName"])
         self.zg_Pars=self.DicoDATA["zg_Pars"]
+        self.zg=np.linspace(*self.DicoDATA["zg_Pars"])
+        self.NSlice=self.zg.size-1
         self.logM_Pars=self.DicoDATA["logM_Pars"]
         
     def RaDecToMaskPix(self,ra,dec):
@@ -612,7 +614,7 @@ class ClassCatalogMachine():
             NPixZero=self.MaskArray.size-np.count_nonzero(self.MaskArray)
             self.OmegaTotal=NPixZero*(self.CDELT*np.pi/180)**2
             
-    def cutCat(self,rac,decc,NPix,CellRad):
+    def giveCutCat(self,rac,decc,NPix,CellRad):
         log.print("Selection objects in window...")
         lc,mc=self.CoordMachine.radec2lm(rac,decc)
         # r=((NPix//2)+0.5)*CellRad
@@ -636,11 +638,11 @@ class ClassCatalogMachine():
         ind=np.where(Cl&Cm&CP)[0]
 
         NN0=self.Cat.shape[0]
-        self.Cat_s=self.Cat[ind]
-        self.Cat_s=self.Cat_s.view(np.recarray)
-        self.Cat_s.xCube=np.int32(np.around((self.Cat_s.l-lc)/CellRad))+NPix//2
-        self.Cat_s.yCube=np.int32(np.around((self.Cat_s.m-mc)/CellRad))+NPix//2
-        
+        Cat_s=self.Cat[ind]
+        Cat_s=Cat_s.view(np.recarray)
+        Cat_s.xCube=np.int32(np.around((Cat_s.l-lc)/CellRad))+NPix//2
+        Cat_s.yCube=np.int32(np.around((Cat_s.m-mc)/CellRad))+NPix//2
+
         #log.print((self.Cat_s.xCube.max(),self.Cat_s.yCube.max()))
         #log.print((self.Cat_s.xCube.min(),self.Cat_s.yCube.min()))
 
@@ -660,8 +662,9 @@ class ClassCatalogMachine():
         #     self.Cat_s.n_zt[ID][:]=np.sum(self.Cat_s.Pzm[ID]*n_zm,axis=1)
         # # ##############################
         
-        N1=self.Cat_s.shape[0]
+        N1=Cat_s.shape[0]
         log.print( "Selected %i objects [out of %i - that is %.3f%% of the main catalog]"%(N1,NN0,100*float(N1)/NN0))
+        return Cat_s
         
 def test(Show=True,NameOut="Test100kpc.fits"):
 
