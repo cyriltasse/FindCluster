@@ -58,7 +58,7 @@ class ClassRunMultiLM():
     def __init__(self,
                  mainFOV=0.1,
                  CellDeg=0.002,
-                 NCPU=0):
+                 NCPU=28):
         DoPlot=False
         self.NCPU=NCPU
         pylab.close("all")
@@ -81,7 +81,7 @@ class ClassRunMultiLM():
         self.CellRad=CellRad=CellDeg*np.pi/180
 
         
-        Dl=FacetFOV*np.pi/180/2
+        Dl=FacetFOV*np.pi/180/4
         mainFOV=(mainFOV//FacetFOV+1)*FacetFOV
         self.mainFOVrad=mainFOVrad=mainFOV*np.pi/180
 
@@ -89,14 +89,14 @@ class ClassRunMultiLM():
         if (NPixMain%2)==0:
             NPixMain+=1
         self.NPixMain=NPixMain
-        
+        log.print("Npix for the whole cube: %i"%self.NPixMain)
         NFacet=int(mainFOVrad/Dl+1)
         l0=-mainFOVrad/2.
         lFacet_g=l0+Dl*np.arange(NFacet)
         mFacet_g=lFacet_g
 
         self.rac_main,self.decc_main=self.CM.racdecc_main
-        self.rac_main,self.decc_main=241.20678*np.pi/180,55.59485*np.pi/180
+        #self.rac_main,self.decc_main=241.20678*np.pi/180,55.59485*np.pi/180
         #self.rac_main,self.decc_main = rac_main_rad*180/np.pi,decc_main_rad*180/np.pi
 
         self.CoordMachine = ModCoord.ClassCoordConv(self.rac_main, self.decc_main)
@@ -123,7 +123,7 @@ class ClassRunMultiLM():
         logger.setSilent(["ClassEigenSW",
                           "ClassAndersonDarling",
                           "ClassRunLM",
-                          "PlotMachine",
+                          #"PlotMachine",
                           "ClassAndersonDarling",
                           "ClassCatalogMachine",
                           "ClassSelectionFunction"])
@@ -145,24 +145,34 @@ class ClassRunMultiLM():
                       "CellDeg":self.CellDeg}
             APP.runJob("_giveGammaFacet:%i"%(FacetID), 
                        self._giveGammaFacet,
-                       args=(SubField,FacetID))#,serial=True)
+                       args=(SubField,FacetID),serial=True)
             
         results=APP.awaitJobResults("_giveGammaFacet:*", progress="Compute Gamma")
         
 
         for res in results:
             FacetID,g,MedianCube,SigmaCube=res
+            if g is None:
+                continue
             self.DicoFacets[FacetID]["MedianCube"]=MedianCube
-            self.DicoFacets[FacetID]["Sigma"]=SigmaCube
+            self.DicoFacets[FacetID]["g"]=g
+            self.DicoFacets[FacetID]["SigmaCube"]=SigmaCube
 
         Im=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
         ImSum=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
-        xx,yy=np.mgrid[-3.:3:1j*self.NPixFacet,-3.:3:1j*self.NPixFacet]
-        #WFacet=np.ones((self.CM.NSlice,self.NPixFacet,self.NPixFacet),np.float32)
+        Im1=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
+        Im1Sum=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
+        sig=2.
+        xx,yy=np.mgrid[-sig:sig:1j*self.NPixFacet,-sig:sig:1j*self.NPixFacet]
+        # WFacet=np.ones((self.CM.NSlice,self.NPixFacet,self.NPixFacet),np.float32)
         WFacet=np.exp(-(xx**2+yy**2)/2.)
         WFacet=WFacet.reshape((1,self.NPixFacet,self.NPixFacet))
         
         for FacetID in sorted(list(self.DicoFacets.keys())):
+            
+            if not "g" in list(self.DicoFacets[FacetID].keys()):
+                continue
+            
             x,y=self.DicoFacets[FacetID]["xy"]
             N0=self.NPixFacet
             N1=self.NPixMain
@@ -172,10 +182,14 @@ class ClassRunMultiLM():
             x0,x1,y0,y1=Aedge
             
             MedianCube=self.DicoFacets[FacetID]["MedianCube"]
-
+            VarCube=self.DicoFacets[FacetID]["SigmaCube"]**2
+            
             #Im=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
             Im[:,x0:x1,y0:y1]+=(MedianCube*WFacet)[:,x0d:x1d,y0d:y1d]
             ImSum[:,x0:x1,y0:y1]+=WFacet[:,x0d:x1d,y0d:y1d]
+
+            Im1[:,x0:x1,y0:y1]+=(VarCube*WFacet**2)[:,x0d:x1d,y0d:y1d]
+            Im1Sum[:,x0:x1,y0:y1]+=(WFacet**2)[:,x0d:x1d,y0d:y1d]
 
         pylab.clf()
         pylab.imshow((Im/ImSum)[2],interpolation="nearest",vmin=-1,vmax=1)
@@ -185,19 +199,26 @@ class ClassRunMultiLM():
         
         self.MedianCube=Im/ImSum
         self.MedianCube[np.isnan(self.MedianCube)]=0.
-        self.SaveFITS()
+        self.SaveFITS("Test.median.fits",self.MedianCube)
+
+        self.StdCube=Im1/Im1Sum
+        self.StdCube[np.isnan(self.StdCube)]=0.
+        self.StdCube=np.sqrt(self.StdCube)
+        self.SaveFITS("Test.std.fits",self.StdCube)
+        
+        
             
-    def SaveFITS(self,Name="Test.fits"):
+    def SaveFITS(self,Name,A):
 
         im=ClassSaveFITS.ClassSaveFITS(Name,
-                                       self.MedianCube.shape,
+                                       A.shape,
                                        self.CellDeg,
                                        (self.rac_main,self.decc_main))#, Freqs=np.linspace(1400e6,1500e6,20))
 
 
-        Gd=np.zeros_like(self.MedianCube)
+        Gd=np.zeros_like(A)
         for ich in range(self.CM.NSlice):
-            Gd[ich]=self.MedianCube[ich].T[:,::-1]
+            Gd[ich]=A[ich].T[:,::-1]
         im.setdata(Gd.astype(np.float32))#,CorrT=True)
         im.ToFits()
         im.close()
@@ -210,7 +231,8 @@ class ClassRunMultiLM():
                                           self.DicoCov,
                                           DoPlot=False,
                                           PlotID=FacetID)
-        
+        if CLM.CLM.Ns==0:
+            return FacetID, None,None,None
         
         g,MedianCube,SigmaCube=CLM.runLM()
         return FacetID,g,MedianCube,SigmaCube

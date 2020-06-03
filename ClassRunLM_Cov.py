@@ -106,7 +106,7 @@ class ClassRunLM_Cov():
                  CM,
                  DicoCov,
                  DoPlot=False,
-                 NCPU=56,
+                 NCPU=28,
                  BasisType="Cov",
                  ScaleKpc=100.,PlotID=None):
         self.PlotID=PlotID
@@ -136,6 +136,9 @@ class ClassRunLM_Cov():
         G/=G[-1]
         self.DistMachine.setCumulDist(z,G)
         self.CLM=ClassLikelihoodMachine.ClassLikelihoodMachine(self.CM,SubField)
+        if self.CLM.Ns==0:
+            return 
+        
         self.CLM.MassFunction.setGammaGrid((self.CM.rac_main,self.CM.decc_main),
                                            (self.rac,self.decc),
                                            self.CellDeg,
@@ -154,7 +157,7 @@ class ClassRunLM_Cov():
         
         self.CLM.ComputeIndexCube(self.NPix)
         self.MoveType="Stretch"
-        
+
         
         
     
@@ -462,8 +465,8 @@ class ClassRunLM_Cov():
             dL=L-L_L[-1]
             if Alpha<1e-7 or HasConverged:
                 log.print(ModColor.Str("STOP"))
-                PM.Plot(g,NTry=500,Force=True)
-                # PM.Plot(g,NTry=500,FullHessian=True,Force=True)
+                #PM.Plot(g,NTry=500,Force=True)
+                PM.Plot(g,NTry=500,FullHessian=True,Force=True)
                 return g,self.PM.MedianCube,self.PM.SigmaCube
             if L<L_L[-1]:
                 log.print(ModColor.Str("Things are getting worse"))
@@ -487,7 +490,7 @@ class ClassRunLM_Cov():
                 if dL!=0 and len(L_dL)>20:
                     Mean_dL=np.mean(np.array(L_dL)[-10:])
                     log.print("  Mean_dL=%f"%Mean_dL)
-                    if Mean_dL<10.3:
+                    if Mean_dL<30.:
                         log.print(ModColor.Str("Likelihood does not improve anymore"))
                         HasConverged=True
                     

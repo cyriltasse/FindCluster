@@ -27,6 +27,8 @@ def GiveNXNYPanels(Ns,ratio=800/500):
     ny=Ns//nx
     if nx*ny<Ns: ny+=1
     return nx,ny
+import psutil
+import time
 
 import scipy.special
 erf=scipy.special.erf
@@ -176,10 +178,21 @@ class ClassPlotMachine():
             Sig=np.sqrt(1./np.abs(dJdg))#/2.
             gArray=np.array([g+Sig*np.random.randn(*g.shape) for iTry in range(NTry)])
         elif FullHessian:
-            log.print("  building Hessian...")
+            while True:
+                m=psutil.virtual_memory()
+                if m.percent<50.: break
+                print(m.percent)
+                time.sleep(1)
+            log.print("  building full Hessian...")
             dJdG=self.CLM.d2logPdg2(g,Diag=False)
+            log.print("  .T")
             dJdG=(dJdG+dJdG.T)/2.
             # idJdG=ModLinAlg.invSVD(dJdg)
+            while True:
+                m=psutil.virtual_memory()
+                if m.percent<50.: break
+                print(m.percent)
+                time.sleep(3)
             log.print("  doing SVD...")
             #dJdG=np.diag(np.diag(dJdG))
             Us,ss,Vs=np.linalg.svd(dJdG)
@@ -197,8 +210,18 @@ class ClassPlotMachine():
             Us=Us[:,:]
             ssqs=ssqs.flat[:]
             
+            while True:
+                m=psutil.virtual_memory()
+                if m.percent<50.: break
+                print(m.percent)
+                time.sleep(3)
             sqrtCs =Us*ssqs.reshape(1,ssqs.size)
             
+            while True:
+                m=psutil.virtual_memory()
+                if m.percent<50.: break
+                print(m.percent)
+                time.sleep(3)
             log.print("  creating random set...")
             gArray=np.array([ (g.flatten()+np.dot(sqrtCs,np.random.randn(ssqs.size,1)).flatten()) for iTry in range(NTry)])
             
@@ -207,9 +230,12 @@ class ClassPlotMachine():
             GammaStat[iTry]=(self.GM.giveGammaCube(gArray[iTry],ScaleCube=self.ScaleCube))
         self.GammaStat=GammaStat
 
-        Cube_q0=np.quantile(self.GammaStat,0.15e-2,axis=0)
-        Cube_q1=np.quantile(self.GammaStat,0.9985,axis=0)
-        self.SigmaCube=(Cube_q1-Cube_q0)/6.
+        # Cube_q0=np.quantile(self.GammaStat,0.15e-2,axis=0)
+        # Cube_q1=np.quantile(self.GammaStat,0.9985,axis=0)
+        # self.SigmaCube=(Cube_q1-Cube_q0)/6.
+        Cube_q0=np.quantile(self.GammaStat,0.16,axis=0)
+        Cube_q1=np.quantile(self.GammaStat,0.84,axis=0)
+        self.SigmaCube=(Cube_q1-Cube_q0)/2.
         self.MedianCube=np.quantile(self.GammaStat,0.5,axis=0)
         self.GammaStat=GammaStat
         
