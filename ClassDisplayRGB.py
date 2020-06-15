@@ -54,10 +54,11 @@ class ClassDisplayRGB():
     def setBoxArcMin(self,boxArcMin):
         self.boxArcMin=boxArcMin
 
-    def FitsToArray(self):
-        self.CutNames=["/tmp/%s.cut.fits"%path_leaf(ThisName) for ThisName in self.Names]
+    def FitsToArray(self,Slice=None):
+        self.CutNames=["/data/tasse/tmp/%s.cut.fits"%path_leaf(ThisName) for ThisName in self.Names]
         self.ListImage=[]
         self.LWCS=[]
+        self.Slice=Slice
         for InFile,OutFile in zip(self.Names,self.CutNames):
             
             self.ListImage.append(CutImage.CutFits(InFile=InFile,
@@ -66,17 +67,26 @@ class ClassDisplayRGB():
                                                    Dec=self.dec,
                                                    boxArcMin=self.boxArcMin,
                                                    Overwrite=True,
-                                                   dPix=1))
+                                                   dPix=1,
+                                                   Slice=Slice))
             hdu = pyfits.open(OutFile)[0]
             wcs=WCS(hdu.header)
             self.LWCS.append(wcs)
 
+            
         R,G,B=self.ListImage
-        img = np.zeros((R.shape[0], R.shape[1], 3), dtype=float)
-        img[:,:,0]=R[:,:]
-        img[:,:,1]=G[:,:]
-        img[:,:,2]=B[:,:]
+        if not Slice:
+            img = np.zeros((R.shape[0], R.shape[1], 3), dtype=float)
+            img[:,:,0]=R[:,:]
+            img[:,:,1]=G[:,:]
+            img[:,:,2]=B[:,:]
+        else:
+            img = np.zeros((R.shape[1], R.shape[2], 3), dtype=float)
+            img[:,:,0]=R[Slice,:,:]
+            img[:,:,1]=G[Slice,:,:]
+            img[:,:,2]=B[Slice,:,:]
         self.img=img[::-1,:]
+        
 
         Image=self.CutNames[0]
         Fits=pyfits.open(Image)[0]
@@ -94,7 +104,9 @@ class ClassDisplayRGB():
                 Scale="sqrt",
                 vmin=0,
                 vmax=500,
-                NamePNG=None):
+                NamePNG=None,
+                figax=None,
+                SkipShow=False):
         
         img=self.img
         
@@ -109,32 +121,44 @@ class ClassDisplayRGB():
         img[:,:,1] = ff(img[:,:,1], scale_min=vmin, scale_max=vmax)
         img[:,:,2] = ff(img[:,:,2], scale_min=vmin, scale_max=vmax)
 
-        fig=pylab.figure("RGB Composite",figsize=(10,10))
-        pylab.clf()
-
+        if figax is None:
+            fig=pylab.figure("RGB Composite",figsize=(10,10))
+            pylab.clf()
+            ax=pylab.subplot(1,1,1)
+        else:
+            fig,ax=figax
+            
         nx=img.shape[0]
         d=(nx//2+0.5)*self.CDELT
         wcs=self.LWCS[0]
-        ra0,dec0=wcs.all_pix2world([0],[0],1)
-        ra1,dec1=wcs.all_pix2world([nx-1],[nx-1],1)
-
+        if not self.Slice:
+            ra0,dec0=wcs.all_pix2world([0],[0],1)
+            ra1,dec1=wcs.all_pix2world([nx-1],[nx-1],1)
+        else:
+            ra0,dec0,_=wcs.all_pix2world([0],[0],[self.Slice],1)
+            ra1,dec1,_=wcs.all_pix2world([nx-1],[nx-1],[self.Slice],1)
+            
         CoordMachine = ModCoord.ClassCoordConv(self.rac, self.decc)
         l0,m0=CoordMachine.radec2lm(ra0*np.pi/180,dec0*np.pi/180)
         l1,m1=CoordMachine.radec2lm(ra1*np.pi/180,dec1*np.pi/180)
-        
+
         # l0=self.rac_cut-d
         # l1=self.rac_cut+d
         # m0=self.decc_cut-d
         # m1=self.decc_cut+d
-        pylab.imshow(img,
-                     aspect='equal',
-                     extent=[l0[0],l1[0],m0[0],m1[0]])
-        pylab.draw()
-        if NamePNG:
-            log.print("Saving image as: %s"%NamePNG)
-            fig.savefig(NamePNG)
-        pylab.show(False)
-        pylab.pause(0.1)
+        self.img=img
+        self.extent=[l0[0],l1[0],m0[0],m1[0]]
+        if not SkipShow:
+            ax.imshow(img,
+                      aspect='equal',
+                      extent=self.extent)
+            pylab.draw()
+            if NamePNG:
+                log.print("Saving image as: %s"%NamePNG)
+                fig.savefig(NamePNG)
+            
+            pylab.show(block=False)
+            pylab.pause(0.1)
 
         
       

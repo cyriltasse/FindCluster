@@ -490,7 +490,7 @@ class ClassRunLM_Cov():
                 if dL!=0 and len(L_dL)>20:
                     Mean_dL=np.mean(np.array(L_dL)[-10:])
                     log.print("  Mean_dL=%f"%Mean_dL)
-                    if Mean_dL<30.:
+                    if Mean_dL<0.3:
                         log.print(ModColor.Str("Likelihood does not improve anymore"))
                         HasConverged=True
                     

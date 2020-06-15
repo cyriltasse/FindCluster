@@ -499,12 +499,11 @@ class ClassLikelihoodMachine():
         SBins=np.int64(np.linspace(0,Ns,Ns//db+2))
         
         dbPix=100
-        NPixMask=self.IndexCube_Mask_Slice.size
-        SBinsPix=np.int64(np.linspace(0,NPixMask,NPixMask//dbPix+2))
+        SBinsPix=np.int64(np.linspace(0,self.NPix**2,self.NPix**2//dbPix+2))
         
         
         for iSlice in range(self.NSlice):
-            print("iSlice %i"%iSlice)
+            # print("iSlice %i"%iSlice)
             GammaSlice=GM.GammaCube[iSlice]
             i0,i1=DicoIndex[iSlice]
             ThisNParms=i1-i0
@@ -514,21 +513,39 @@ class ClassLikelihoodMachine():
             
             
             # ##################################
-            print("dNx_0_dg")
-            dNx_0_dg=n_z[iSlice]\
-                      * SqrtCov.reshape((self.NPix**2,ThisNParms,1))\
-                      * SqrtCov.reshape((self.NPix**2,1,ThisNParms))\
-                      * GammaSlice.reshape((-1,1,1))*self.CellRad_0**2*self.fNormLog
-            SBinsPix
-            Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,...],axis=0)
-            H[iPar:jPar,iPar:jPar]+= - Sum_dNx_0_dg
-            del(dNx_0_dg,Sum_dNx_0_dg)
-            for isBin in range(SBins.size-1):
-                s0,s1=SBins[isBin],SBins[isBin+1]
+            # print("dNx_0_dg")
+            # dNx_0_dg=n_z[iSlice]\
+            #           * SqrtCov.reshape((self.NPix**2,ThisNParms,1))\
+            #           * SqrtCov.reshape((self.NPix**2,1,ThisNParms))\
+            #           * GammaSlice.reshape((-1,1,1))*self.CellRad_0**2*self.fNormLog
+            # print("dNx_0_dg a")
+            # Sum_dNx_0_dg=np.sum(dNx_0_dg[self.IndexCube_Mask_Slice,...],axis=0)
+            # print("dNx_0_dg b")
+            # S0=Sum_dNx_0_dg
+            # H[iPar:jPar,iPar:jPar]+= - Sum_dNx_0_dg
+            # #del(dNx_0_dg,Sum_dNx_0_dg)
+
+            
+            S1=0.
+            for isBin in range(SBinsPix.size-1):
+                s0,s1=SBinsPix[isBin],SBinsPix[isBin+1]
                 Nsb=s1-s0
+                dNx_0_dg=n_z[iSlice]\
+                          * SqrtCov[s0:s1,:].reshape((Nsb,ThisNParms,1))\
+                          * SqrtCov[s0:s1,:].reshape((Nsb,1,ThisNParms))\
+                          * GammaSlice.flat[s0:s1].reshape((-1,1,1))*self.CellRad_0**2*self.fNormLog
+                #print("dNx_0_dg a")
+                dNx_0_dg[np.bool8(self.MassFunction.GammaMachine.ThisMask.flat[s0:s1]),...]=0
+                Sum_dNx_0_dg=np.sum(dNx_0_dg[:,...],axis=0)
+                #print("dNx_0_dg b")
+                S1+=Sum_dNx_0_dg
+                H[iPar:jPar,iPar:jPar]+= - Sum_dNx_0_dg
+            del(dNx_0_dg,Sum_dNx_0_dg)
+            #print("dS",S0,S1,np.max(np.abs(S0-S1)))
+            
                 
             # ##################################
-            print("dNx_1_dg")
+            #print("dNx_1_dg")
             dNx_1_dg=n_z[iSlice].reshape(-1,1,1)\
                       * SqrtCov_xy.reshape((Ns,ThisNParms,1))\
                       * SqrtCov_xy.reshape((Ns,1,ThisNParms))\
@@ -537,14 +554,14 @@ class ClassLikelihoodMachine():
             H[iPar:jPar,iPar:jPar]+= Sum_dNx_1_dg
             del(dNx_1_dg,Sum_dNx_1_dg)
             
-            print("dAx_dg_0")
+            #print("dAx_dg_0")
             ng=n_zt[:,iSlice].reshape((-1,1))* GammaSlice.flat[self.IndexCube_xy_Slice].reshape((-1,1))
             dAx_dg_0 = ng.reshape(-1,1,1) * SqrtCov_xy.reshape((Ns,ThisNParms,1)) * SqrtCov_xy.reshape((Ns,1,ThisNParms))
             H[iPar:jPar,iPar:jPar]+= np.sum(dAx_dg_0 * (Sum_z_Ax_1_z.reshape((-1,1,1)))**(-1),axis=0)*self.CellRad_1**2
             del(dAx_dg_0)
             
             for jSlice in range(self.NSlice):
-                print(" jSlice %i %i"%(iSlice,jSlice))
+                #print(" jSlice %i %i"%(iSlice,jSlice))
                 GammaSlice_j=GM.GammaCube[jSlice]
                 j0,j1=DicoIndex[jSlice]
                 ThisNParms_j=j1-j0
@@ -567,12 +584,12 @@ class ClassLikelihoodMachine():
                     Js=dAidg[s0:s1,i0:i1]
                     Js_j=dAidg[s0:s1,j0:j1]
                     Nsb=s1-s0
-                    print("================")
-                    print("H.shape,Ns,Nsb,s0,s1,Sum_z_Ax_1_z.shape",H.shape,Ns,Nsb,s0,s1,Sum_z_Ax_1_z.shape)
+                    #print("================")
+                    #print("H.shape,Ns,Nsb,s0,s1,Sum_z_Ax_1_z.shape",H.shape,Ns,Nsb,s0,s1,Sum_z_Ax_1_z.shape)
                     JJ=Js.reshape((Nsb,ThisNParms,1))*Js_j.reshape((Nsb,1,ThisNParms_j))
-                    print("   ",JJ.shape)
+                    #print("   ",JJ.shape)
                     GG=((Sum_z_Ax_1_z.flat[s0:s1]).reshape((-1,1,1)))**(-2)
-                    print("   ",GG.shape)
+                    #print("   ",GG.shape)
                     H[i0:i1,j0:j1]+= - np.sum(JJ * GG ,axis=0)*self.CellRad_1**4
                     
 

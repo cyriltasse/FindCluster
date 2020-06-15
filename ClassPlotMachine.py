@@ -181,7 +181,7 @@ class ClassPlotMachine():
             while True:
                 m=psutil.virtual_memory()
                 if m.percent<50.: break
-                print(m.percent)
+                #print(m.percent)
                 time.sleep(1)
             log.print("  building full Hessian...")
             dJdG=self.CLM.d2logPdg2(g,Diag=False)
@@ -191,7 +191,7 @@ class ClassPlotMachine():
             while True:
                 m=psutil.virtual_memory()
                 if m.percent<50.: break
-                print(m.percent)
+                #print(m.percent)
                 time.sleep(3)
             log.print("  doing SVD...")
             #dJdG=np.diag(np.diag(dJdG))
@@ -213,14 +213,14 @@ class ClassPlotMachine():
             while True:
                 m=psutil.virtual_memory()
                 if m.percent<50.: break
-                print(m.percent)
+                #print(m.percent)
                 time.sleep(3)
             sqrtCs =Us*ssqs.reshape(1,ssqs.size)
             
             while True:
                 m=psutil.virtual_memory()
                 if m.percent<50.: break
-                print(m.percent)
+                #print(m.percent)
                 time.sleep(3)
             log.print("  creating random set...")
             gArray=np.array([ (g.flatten()+np.dot(sqrtCs,np.random.randn(ssqs.size,1)).flatten()) for iTry in range(NTry)])

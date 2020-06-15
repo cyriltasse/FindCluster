@@ -51,7 +51,7 @@ def AngDist(ra0,dec0,ra1,dec1):
 # # ##############################
 
 class ClassCatalogMachine():
-    def __init__(self,zg_Pars=[0.1,1,10],logM_Pars=[8.,12.,8]):
+    def __init__(self,zg_Pars=[0.1,1.5,15],logM_Pars=[8.,12.,8]):
         self.MaskFits=None
         self.DicoDATA={}
         self.PhysCat=None

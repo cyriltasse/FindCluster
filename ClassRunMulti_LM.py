@@ -44,12 +44,15 @@ import ClassSaveFITS
 # np.seterr(all='raise')
 # import warnings
 # warnings.filterwarnings('error')
-# #with warnings.catch_warnings():
+# # with warnings.catch_warnings():
 # #    warnings.filterwarnings('error')
 # # ##############################
 
 def test():
-    CLM=ClassRunMultiLM(mainFOV=0.3)
+
+
+    #CLM=ClassRunMultiLM(mainFOV=.3)
+    CLM=ClassRunMultiLM(mainFOV=5.)
     CLM.run()
 
 
@@ -58,7 +61,7 @@ class ClassRunMultiLM():
     def __init__(self,
                  mainFOV=0.1,
                  CellDeg=0.002,
-                 NCPU=28):
+                 NCPU=56):
         DoPlot=False
         self.NCPU=NCPU
         pylab.close("all")
@@ -70,7 +73,7 @@ class ClassRunMultiLM():
         self.CM=CM
 
         #241.20678,55.59485 # cluster
-        FacetFOV=0.2
+        FacetFOV=0.15
         NPix=int(FacetFOV/CellDeg)
         if (NPix%2)==0:
             NPix+=1
@@ -81,7 +84,7 @@ class ClassRunMultiLM():
         self.CellRad=CellRad=CellDeg*np.pi/180
 
         
-        Dl=FacetFOV*np.pi/180/4
+        Dl=FacetFOV*np.pi/180/2
         mainFOV=(mainFOV//FacetFOV+1)*FacetFOV
         self.mainFOVrad=mainFOVrad=mainFOV*np.pi/180
 
@@ -123,7 +126,7 @@ class ClassRunMultiLM():
         logger.setSilent(["ClassEigenSW",
                           "ClassAndersonDarling",
                           "ClassRunLM",
-                          #"PlotMachine",
+                          "PlotMachine",
                           "ClassAndersonDarling",
                           "ClassCatalogMachine",
                           "ClassSelectionFunction"])
@@ -145,7 +148,7 @@ class ClassRunMultiLM():
                       "CellDeg":self.CellDeg}
             APP.runJob("_giveGammaFacet:%i"%(FacetID), 
                        self._giveGammaFacet,
-                       args=(SubField,FacetID),serial=True)
+                       args=(SubField,FacetID))#,serial=True)
             
         results=APP.awaitJobResults("_giveGammaFacet:*", progress="Compute Gamma")
         
@@ -210,10 +213,14 @@ class ClassRunMultiLM():
             
     def SaveFITS(self,Name,A):
 
+
+        zz=np.linspace(*self.CM.zg_Pars)
+        zm=(zz[1::]+zz[0:-1])/2.
         im=ClassSaveFITS.ClassSaveFITS(Name,
                                        A.shape,
                                        self.CellDeg,
-                                       (self.rac_main,self.decc_main))#, Freqs=np.linspace(1400e6,1500e6,20))
+                                       (self.rac_main,self.decc_main),
+                                       Freqs=zm)
 
 
         Gd=np.zeros_like(A)

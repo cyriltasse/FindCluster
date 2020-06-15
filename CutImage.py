@@ -19,7 +19,7 @@ def read_options():
     group.add_option('--OutFile',type=str,help='',default=None)
     group.add_option('--Ra',type=float,help='',default=None)
     group.add_option('--Dec',type=float,help='',default=None)
-    group.add_option('--N',type=int,help='',default=None)
+    group.add_option('--N',type=int,help='',default=100)
     group.add_option('--dPix',type=int,help='',default=1)
     opt.add_option_group(group)
     
@@ -28,22 +28,25 @@ def read_options():
     pickle.dump(options,f)
     return options
 
-def CutFits(InFile=None,OutFile=None,Ra=None,Dec=None,N=100,Overwrite=True,dPix=1,boxArcMin=None):
+def CutFits(InFile=None,OutFile=None,Ra=None,Dec=None,N=100,Overwrite=True,dPix=1,boxArcMin=None,Slice=None):
     if OutFile is None:
         OutFile="%s.cut.fits"%InFile
     if not Overwrite:
         if os.path.isfile(OutFile):
             return
 
+    log.print("Reading = %s"%(InFile))
     f = fits.open(InFile)
     h=f[0].header
     for key in h.keys():
         if "PC"==key[0:2]: del(h[key])
     w = wcs.WCS(h)
-    newf = fits.PrimaryHDU()
     N=int(N)
     if boxArcMin is not None:
-        dPixDeg=abs(w.wcs.cd.flat[0])
+        try:
+            dPixDeg=abs(w.wcs.cd.flat[0])
+        except:
+            dPixDeg=abs(w.wcs.cdelt.flat[0])
         N=int((boxArcMin/60.)/dPixDeg/2)
         
     if Ra is None:
@@ -51,17 +54,27 @@ def CutFits(InFile=None,OutFile=None,Ra=None,Dec=None,N=100,Overwrite=True,dPix=
     if Dec is None:
         Dec=w.wcs.crval[1]
 
-    print>>log, "Centering on (Ra, Dec) = %f, %f"%(Ra,Dec)
-    xc,yc=w.all_world2pix(Ra,Dec,1)
-    xc=int(xc[()])
-    yc=int(yc[()])
     
-    newf.data = f[0].data[yc-N:yc+N:dPix,xc-N:xc+N:dPix]
-    newf.header = f[0].header
-    newf.header.update(w[yc-N:yc+N:dPix,xc-N:xc+N:dPix].to_header())
+    log.print("Centering on (Ra, Dec) = %f, %f [N=%i]"%(Ra,Dec,N))
+    
+    newf = fits.PrimaryHDU()
+    if Slice is None:
+        xc,yc=w.all_world2pix(Ra,Dec,1)
+        xc=int(xc[()])
+        yc=int(yc[()])
+        newf.data = f[0].data[yc-N:yc+N:dPix,xc-N:xc+N:dPix]
+        newf.header = f[0].header
+        newf.header.update(w[yc-N:yc+N:dPix,xc-N:xc+N:dPix].to_header())
+    else:
+        
+        xc,yc,_=w.all_world2pix(Ra,Dec,0.,1)
+        xc=int(xc[()])
+        yc=int(yc[()])
+        newf.data = f[0].data[:,yc-N:yc+N:dPix,xc-N:xc+N:dPix]
+        newf.header = f[0].header
+        newf.header.update(w[:,yc-N:yc+N:dPix,xc-N:xc+N:dPix].to_header())
 
-
-
+        
     # newf.data = f[0].data[0,0,yc-N:yc+N,xc-N:xc+N]
     # newf.header = f[0].header
     # newf.header.update(w[:,:,yc-N:yc+N,xc-N:xc+N].to_header())
@@ -74,7 +87,7 @@ def CutFits(InFile=None,OutFile=None,Ra=None,Dec=None,N=100,Overwrite=True,dPix=
     
     if os.path.isfile(OutFile):
         os.system("rm %s"%OutFile)
-    print>>log, "Writting image %s"%OutFile
+    log.print("Writting image %s"%OutFile)
     newf.writeto(OutFile)
     return newf.data
 
