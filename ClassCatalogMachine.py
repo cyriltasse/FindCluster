@@ -158,8 +158,27 @@ class ClassCatalogMachine():
 #        return
         log.print(ModColor.Str("Recomputing quantities..."))
         #self.Cat=self.Cat[np.where(self.Cat.Nfilts>=12)[0]]
-        dz=np.abs(self.Cat.z1_max-self.Cat.z1_min)
-        self.Cat=self.Cat[np.where(dz<0.3)[0]]
+        
+        x=[0.,1.4]
+        y=[0.1,0.6]   
+        Q=np.polyfit(x,y,1)
+        p=np.poly1d(Q)
+        SigMax=p(self.Cat.z1_median)
+        dz=np.abs(self.Cat.z1_max-self.Cat.z1_min)/2.
+        Mask=(dz<SigMax)
+        xx=np.linspace(0.,1.4)
+        yy=p(xx)
+        # import pylab
+        # pylab.clf()
+        # #pylab.scatter(self.Cat.z1_median,dz)
+        # pylab.hexbin(self.Cat.z1_median,dz)
+        # pylab.plot(xx,yy)
+        # pylab.draw()
+        # pylab.show()
+        
+        #self.Cat=self.Cat[np.where(dz<0.6)[0]]
+        log.print("Selecting %i objects [out of %i]"%(np.count_nonzero(Mask),Mask.size))
+        self.Cat=self.Cat[np.where(Mask==1)[0]]
         #I=self.Cat.z_flux
         #ind=np.where((I>3*Std)&np.logical_not(np.isnan(I)))[0]
         Ns,Nz,Nm=self.Cat.Pzm.shape

@@ -176,7 +176,10 @@ class ClassGammaMachine():
                 vmin,vmax=vmm[iSlice]
             else:
                 Snn=S[np.logical_not(np.isnan(S))]
-                vmin,vmax=Snn.min(),Snn.max()
+                if Snn.size>0:
+                    vmin,vmax=Snn.min(),Snn.max()
+                else:
+                    vmin,vmax=-1.,1.
             cmap=pylab.cm.cubehelix
             cmap=pylab.cm.plasma
             cmap=pylab.cm.inferno

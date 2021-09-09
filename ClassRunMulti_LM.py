@@ -53,6 +53,7 @@ def test():
 
     #CLM=ClassRunMultiLM(mainFOV=.3)
     CLM=ClassRunMultiLM(mainFOV=5.)
+    #CLM=ClassRunMultiLM(mainFOV=.3)
     CLM.run()
 
 
@@ -84,7 +85,7 @@ class ClassRunMultiLM():
         self.CellRad=CellRad=CellDeg*np.pi/180
 
         
-        Dl=FacetFOV*np.pi/180/2
+        Dl=FacetFOV*np.pi/180/4
         mainFOV=(mainFOV//FacetFOV+1)*FacetFOV
         self.mainFOVrad=mainFOVrad=mainFOV*np.pi/180
 
@@ -100,6 +101,7 @@ class ClassRunMultiLM():
 
         self.rac_main,self.decc_main=self.CM.racdecc_main
         #self.rac_main,self.decc_main=241.20678*np.pi/180,55.59485*np.pi/180
+        #self.rac_main,self.decc_main=244.1718*np.pi/180,55.75713889*np.pi/180
         #self.rac_main,self.decc_main = rac_main_rad*180/np.pi,decc_main_rad*180/np.pi
 
         self.CoordMachine = ModCoord.ClassCoordConv(self.rac_main, self.decc_main)

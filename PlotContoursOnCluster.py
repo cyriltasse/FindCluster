@@ -26,6 +26,7 @@ import ClassGammaMachine_Wave
 import ClassDisplayRGB
 import ClassSaveFITS
 import GeneDist
+from DDFacet.ToolsDir.rad2hmsdms import rad2hmsdms
 
 
 def main():
@@ -34,7 +35,11 @@ def main():
     CM.Recompute_nz_nzt()
     Box=15.
     rac_deg,decc_deg=241.20678,55.59485
+    Box=15.
+    rac_deg,decc_deg=244.1718,55.75713889
 
+    rarad,decrad=rac_deg*np.pi/180,decc_deg*np.pi/180
+    print(rad2hmsdms(rarad,Type="ra").replace(" ",":"),rad2hmsdms(decrad,Type="dec").replace(" ","."))
     pylab.close("all")
     fig=pylab.figure("Cluster",figsize=(20,10))
     pylab.clf()
@@ -51,19 +56,20 @@ def main():
     ax.axes.xaxis.set_ticklabels([])
     ax.axes.yaxis.set_ticklabels([])
     pylab.grid()
-    
-    ax=pylab.subplot(1,2,2)
+    DRGB0=DRGB
+    ax=pylab.subplot(1,2,2,sharex=ax,sharey=ax)
     LN=["EN1.Gamma.median.fits","EN1.Gamma.median.fits","EN1.Gamma.median.fits"]
+    LN=["Test.median.fits","Test.median.fits","Test.median.fits"]
     DRGB=ClassDisplayRGB.ClassDisplayRGB()
     DRGB.setRGB_FITS(*LN)
     DRGB.setRaDec(rac_deg,decc_deg)
     DRGB.setBoxArcMin(Box)
-    DRGB.FitsToArray(Slice=1)
-    DRGB.Display(figax=(fig,ax),Scale="linear",vmin=-1.,vmax=1.,SkipShow=True)
+    DRGB.FitsToArray(Slice=10)
+    DRGB.Display(figax=(fig,ax),Scale="linear",vmin=-1.,vmax=2.,SkipShow=True)
     # ax.cla()
     ax.imshow(DRGB.img[:,:,0],
               aspect='equal',
-              extent=DRGB.extent,
+              extent=DRGB0.extent,
               cmap=pylab.cm.cividis)
     #ax.axes.xaxis.set_visible(False)
     #ax.axes.yaxis.set_visible(False)
