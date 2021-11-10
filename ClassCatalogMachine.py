@@ -51,7 +51,7 @@ def AngDist(ra0,dec0,ra1,dec1):
 # # ##############################
 
 class ClassCatalogMachine():
-    def __init__(self,zg_Pars=[0.1,1.5,15],logM_Pars=[8.,12.,8]):
+    def __init__(self,zg_Pars=[0.1,1.6,16],logM_Pars=[8.,12.,8]):
         self.MaskFits=None
         self.DicoDATA={}
         self.PhysCat=None
@@ -67,7 +67,9 @@ class ClassCatalogMachine():
     def Init(self,Show=False,FieldName="EN1",ForceLoad=False):
         if FieldName=="EN1":
             self.DicoDataNames=DicoDataNames=FieldsToFiles.DicoDataNames_EN1
-            
+
+
+        log.print("Checking on file: %s"%DicoDataNames["PickleSave"])
         if os.path.isfile(DicoDataNames["PickleSave"]) and not ForceLoad:
             self.PickleLoad(DicoDataNames["PickleSave"])
         else:
@@ -164,6 +166,7 @@ class ClassCatalogMachine():
         Q=np.polyfit(x,y,1)
         p=np.poly1d(Q)
         SigMax=p(self.Cat.z1_median)
+
         dz=np.abs(self.Cat.z1_max-self.Cat.z1_min)/2.
         Mask=(dz<SigMax)
         xx=np.linspace(0.,1.4)

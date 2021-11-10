@@ -199,6 +199,7 @@ class ClassAngularCovMat():
         self.k=k
         #print(":!::")
         #Us,ss,Vs=scipy.sparse.linalg.svds(Cs,k=k)
+        log.print("Computing the SVD of the covariance matrix...")
         Us,ss,Vs=np.linalg.svd(C)
 
         sss=ss[ss>0]
@@ -423,7 +424,7 @@ class ClassCovMatrix():
         pylab.draw()
         pylab.show(False)
         pylab.pause(0.1)
-
+        
         FileOut="%s.RadialCov.npz"%self.CatFile
         log.print("Saving radial Cov in: %s"%FileOut)
         np.savez(FileOut,

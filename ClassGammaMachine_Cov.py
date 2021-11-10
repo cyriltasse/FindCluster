@@ -98,6 +98,47 @@ class ClassGammaMachine():
         self.L_ssqs=DicoCov["L_ssqs"]
         self.NParms=np.sum(self.L_NParms)
 
+
+    def computeGammaSlice(self,X,iSliceCompute,ScaleCube="linear"):
+
+        CurrentX=X.copy()
+        CurrentScaleCube=ScaleCube
+        LX=[]
+        ii=0
+        T=ClassTimeIt.ClassTimeIt("Gamma")
+        T.disable()
+        for iSlice in range(self.NSlice):
+            N=self.L_NParms[iSlice]
+            if N==0:
+                LX.append([])
+                continue
+            #print ii,iSlice,self.NSlice,len(self.L_NParms)
+            LX.append(X[ii:ii+self.L_NParms[iSlice]])
+            if iSliceCompute==iSlice:
+                i0,i1=ii,ii+self.L_NParms[iSlice]
+            ii+=N
+            
+        T.timeit("unpack")
+        GammaCube=np.zeros((self.NPix,self.NPix),self.TypeCube)
+        for iz in [iSliceCompute]:
+            A=self.L_SqrtCov[iz]
+            x=LX[iz].reshape((-1,1))
+            # y=(A.dot(x)).reshape((self.NPix,self.NPix))
+            y=np.dot(self.TypeSqrtC(A),self.TypeSqrtC(x)).reshape((self.NPix,self.NPix))
+            # GammaCube[iz,:,:]=1.+y
+            
+            if self.ScaleCov=="log":
+                #print(ScaleCube)
+                if ScaleCube=="linear":
+                    GammaCube[:,:]=np.exp(y)
+                elif ScaleCube=="log":
+                    GammaCube[:,:]=y/np.log(10)
+            elif self.ScaleCov=="Sigmoid":
+                GammaCube[:,:]=ClassCovMatrix_Sim3D_2.Sigmoid(y,a=self.a_Sigmoid,MaxVal=self.MaxValueSigmoid)
+                stop
+        T.timeit("Slices")
+        return GammaCube,i0,i1
+
         
 
     def computeGammaCube(self,X,ScaleCube="linear"):
@@ -146,7 +187,7 @@ class ClassGammaMachine():
         self.computeGammaCube(X,ScaleCube=ScaleCube)
         return self.GammaCube
     
-    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None,ScaleCube="linear",vmm=None,DicoSourceXY=None):
+    def PlotGammaCube(self,X=None,Cube=None,FigName="Gamma Cube",OutName=None,ScaleCube="linear",vmm=None,DicoSourceXY=None,LSlice=None):
         # return
         if X is not None:
             self.computeGammaCube(X,ScaleCube=ScaleCube)
@@ -162,12 +203,16 @@ class ClassGammaMachine():
         fig=pylab.figure(FigName,figsize=figsize)
         self.CurrentFig=fig
         self.AxList=[]
-        Nx,Ny=GiveNXNYPanels(self.NSlice,ratio=figsize[0]/figsize[1])
-        pylab.clf()
 
-        for iPlot in range(self.NSlice):
-            S=Cube[iPlot]
-            iSlice=iPlot
+        if LSlice is None:
+            LSlice=range(self.NSlice)
+
+        Nx,Ny=GiveNXNYPanels(len(LSlice),ratio=figsize[0]/figsize[1])
+        pylab.clf()
+            
+        for iPlot,iSlice in enumerate(LSlice):
+            S=Cube[iSlice]
+                
             ax=pylab.subplot(Nx,Ny,iPlot+1)
             self.AxList.append(ax)
             # if np.count_nonzero(np.isnan(S))>0:

@@ -167,6 +167,7 @@ class ClassAndersonDarlingMachine():
         
         #dA2_dxi= -2 *self.w(xi)* self.f_Gauss1D(xi) * (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
         dA2_dxi= - 2*self.w(xi) * (Diff(xi+1e-5)+Diff(xi-1e-5))/2.
+        # dA2_dxi= - 2*self.w(xi) * Diff(xi) # works as well as above
         
         #dA2_dxi= -2* (Diff(xi+1e-5)+Diff(xi-1e-5))/2.
         
@@ -188,11 +189,13 @@ class ClassAndersonDarlingMachine():
 
         dA2_dxi= -2 *self.dwdx(xi)#* (Diff(xi+1e-6)+Diff(xi-1e-6))/2.
         dA2_dxi= 2*(-self.dwdx(xi)*(Diff(xi+1e-5)+Diff(xi-1e-5))/2.+self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+        #dA2_dxi= 2*(-self.dwdx(xi)*Diff(xi)+self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
 
         if not Diag:
             dA2_dxi=np.diag(dA2_dxi)
-        #dA2_dxi= -2*(self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
-        #dA2_dxi= -2*(self.dwdx(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+            
+        # dA2_dxi= -2*(self.w(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
+        # dA2_dxi= -2*(self.dwdx(xi)*self.f_Phi.diff()(xi))#((Diff(xi+1e-3)+Diff(xi-1e-3))/2.)**2
         # else:
         #     a,b=self.dwdx(xi),(Diff(xi+1e-5)+Diff(xi-1e-5))/2.
         #     c,d=self.w(xi),self.f_Phi.diff()(xi)

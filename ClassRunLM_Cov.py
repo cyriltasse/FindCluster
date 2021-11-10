@@ -50,7 +50,7 @@ def test(DoPlot=False):
     pylab.close("all")
     rac_deg,decc_deg=241.20678,55.59485 # cluster
     FOV=0.15
-    FOV=0.2
+    #FOV=0.2
     CellDeg=0.002
     NPix=int(FOV/CellDeg)
     if (NPix%2)!=0:
@@ -117,12 +117,10 @@ class ClassRunLM_Cov():
         self.CellDeg=SubField["CellDeg"]
         self.CellRad=self.CellDeg*np.pi/180
         self.NPix=SubField["NPix"]
-        np.random.seed(42)
+        np.random.seed(43)
         self.CM=CM
         
-        
         self.DicoSourceXY=None
-        
         
         self.zParms=self.CM.zg_Pars
         self.NSlice=self.zParms[-1]-1
@@ -153,7 +151,7 @@ class ClassRunLM_Cov():
         # self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
 
         self.XSimul=None
-        # self.simulCat()
+        self.simulCat()
         
         self.CLM.ComputeIndexCube(self.NPix)
         self.MoveType="Stretch"
@@ -166,14 +164,29 @@ class ClassRunLM_Cov():
 
     def simulCat(self):
         log.print("Simulating catalog...")
-        while True:
-            self.X=np.random.randn(self.GM.NParms)
-            self.CubeSimul=self.GM.giveGammaCube(self.X)
-            Mm=np.max(np.log10(self.CubeSimul))
-            log.print("maximum log-density: %f"%Mm)
-            if Mm>1.8:
-                break
+        # while True:
+        #     self.X=np.random.randn(self.GM.NParms)
+        #     self.CubeSimul=self.GM.giveGammaCube(self.X)
+        #     Mm=np.max(np.log10(self.CubeSimul))
+        #     log.print("maximum log-density: %f"%Mm)
+        #     if Mm>1.8:
+        #         break
 
+        iSlice=0
+        self.X=np.random.randn(self.GM.NParms)
+        while True:
+            if iSlice==self.NSlice: break
+            while True:
+                CubeSimulSlice,i0,i1=self.GM.computeGammaSlice(self.X,iSlice)
+                #print(CubeSimulSlice.shape)
+                Mm0=np.min(np.log10(CubeSimulSlice))
+                Mm1=np.max(np.log10(CubeSimulSlice))
+                if Mm0<-.5 and Mm1>1.5:
+                    log.print("[Slice %i] maximum log-density: %f %f"%(iSlice,Mm0,Mm1))
+                    iSlice+=1
+                    break
+                self.X[i0:i1]=np.random.randn(i1-i0)
+        self.CubeSimul=self.GM.giveGammaCube(self.X)
         
         #self.X=self.CLM.recenterNorm(self.X)
         # # self.X.fill(0.)
@@ -216,8 +229,8 @@ class ClassRunLM_Cov():
             log.print("Simulating iSlice = %i"%iSlice)
             GammaSlice=GM.GammaCube[iSlice]
             ThisNzt=np.zeros((self.NSlice,),np.float32)
-            sig=0.05
             z=self.GM.zmg
+            sig=0.02+z[iSlice]*0.02
 
             indZ=np.where((zreal>self.GM.zg[iSlice])&(zreal<self.GM.zg[iSlice+1]))[0]
             
@@ -279,9 +292,12 @@ class ClassRunLM_Cov():
                         #iii=np.int64(CD.GiveSample(1)[0])
                         #ThisNzt=n_ztReal[iii,:]
                         iii=np.int64(np.random.rand(1)[0]*indZ.size)
-                        ThisNzt=n_ztReal[indZ[iii],:]
+                        
+                        #ThisNzt=n_ztReal[indZ[iii],:] # 20/10/21 uncomment this to use the more realistic photoz
+                        
                         #ThisNzt=Pz[indZ[iii],:]
                         pylab.plot(zm,ThisNzt,color="gray",alpha=0.5)
+                        
                         # stop
                         #print(ii,jj)
                         X.append(ii)
@@ -355,7 +371,7 @@ class ClassRunLM_Cov():
         T=ClassTimeIt.ClassTimeIt()
         T.disable()
         if self.XSimul is not None:
-            self.X=self.XSimul
+            self.X=self.XSimul.copy()
         else:
             self.X=np.zeros((self.GM.NParms,),np.float64)
         self.X=np.float64(self.X)
@@ -369,6 +385,13 @@ class ClassRunLM_Cov():
                                              DicoSourceXY=self.DicoSourceXY,
                                              StepPlot=100,PlotID=self.PlotID)
         self.PM=PM
+        self.PM.LTrue=LTrue
+
+        # g=np.load("gEst.npy",allow_pickle=True)[0]
+        # self.PM.Plot(g,NTry=500,Force=True)#,NTry=500,FullHessian=True,Force=True)
+        # #self.PM.Plot(g,NTry=500,Force=True,FullHessian=True)#,NTry=500,FullHessian=True,Force=True)
+        # stop
+        
         # g.fill(0)
         # log.print("True Likelihood = %.5f"%(self.CLM.L(g)))
         iStep=0
@@ -445,6 +468,8 @@ class ClassRunLM_Cov():
         PM.L_L=L_L
         L_g=[g.copy()]
         
+
+
         while True:
             g=self.CLM.recenterNorm(g)
             T.reinit()
@@ -465,8 +490,8 @@ class ClassRunLM_Cov():
             dL=L-L_L[-1]
             if Alpha<1e-7 or HasConverged:
                 log.print(ModColor.Str("STOP"))
-                PM.Plot(g,NTry=500,Force=True)
-                #PM.Plot(g,NTry=500,FullHessian=True,Force=True)
+                #PM.Plot(g,NTry=500,Force=True)
+                PM.Plot(g,NTry=500,FullHessian=True,Force=True)
                 return g,self.PM.MedianCube,self.PM.SigmaCube
             if L<L_L[-1]:
                 log.print(ModColor.Str("Things are getting worse"))
@@ -499,6 +524,7 @@ class ClassRunLM_Cov():
                     Alpha*=factAlpha
                     
                 PM.Plot(g)
+
                 L_g.append(g.copy())
                 L_L.append(L)
                 #if dgest<1e-4:

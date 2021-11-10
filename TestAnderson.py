@@ -150,7 +150,7 @@ def testJacob():
     pylab.draw()
     pylab.show(block=False)
     pylab.pause(0.1)
-
+    return
     # ########################################
     # ##################### logP #############
     
