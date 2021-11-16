@@ -21,12 +21,14 @@ from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError
 from DDFacet.Other import AsyncProcessPool
 from DDFacet.Other import MyPickle
 from DDFacet.Array import shared_dict
-import plotly.graph_objects as go
+#import plotly.graph_objects as go
 from scipy import interpolate
 import scipy.stats
 import ClassCatalogMachine
 import os
 from DDFacet.Array import ModLinAlg
+import FieldsToFiles
+import jax
 
 def Sigmoid(x,a=None,MaxVal=None):
     return MaxVal*1./(1.+np.exp(-a*x))
@@ -201,6 +203,8 @@ class ClassAngularCovMat():
         #Us,ss,Vs=scipy.sparse.linalg.svds(Cs,k=k)
         log.print("Computing the SVD of the covariance matrix...")
         Us,ss,Vs=np.linalg.svd(C)
+        #Us,ss,Vs=jax.numpy.linalg.svd(C)
+        
 
         sss=ss[ss>0]
         log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
@@ -458,7 +462,7 @@ class ClassCovMatrix():
         
     def giveCovMat(self,CellSizeRad=None,NPix=None,zm=None):
         
-        S=np.load("/data/tasse/DataDeepFields/Millenium_z_0.5_0.63.txt.RadialCov.npz",allow_pickle=True)
+        S=np.load("%s/Millenium_z_0.5_0.63.txt.RadialCov.npz"%FieldsToFiles.DataDeepFieldsDir,allow_pickle=True)
         R=S["R"]
         self.MaxValueSigmoid=S["MaxValue"][()]
         self.a_Sigmoid=S["a_Sigmoid"][()]

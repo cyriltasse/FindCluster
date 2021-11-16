@@ -102,7 +102,7 @@ class ClassSaveFITS():
 
 
 def test():
-    np.random.seed(0)
+    #np.random.seed(0)
     name,imShape,Cell,radec="lala3.psf", (10, 1029, 1029), 20, (3.7146787856873478, 0.91111035090915093)
     im=ClassCasaimage(name,imShape,Cell,radec,
                       Freqs=np.linspace(1400e6,1500e6,20),
