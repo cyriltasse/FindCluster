@@ -39,7 +39,7 @@ class ClassRunMCMC():
         self.MoveType="Stretch"
         self.MoveType="Walk"
         self.SWalk=3
-        np.random.seed(6)
+        #np.random.seed(6)
         #self.XSimul=np.random.randn(9)*2
         #self.XSimul=np.random.randn(1)
         #self.XSimul.fill(0)

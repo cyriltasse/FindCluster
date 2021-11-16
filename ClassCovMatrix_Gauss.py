@@ -61,7 +61,7 @@ def test2Pt():
     CC.buildGaussianCov()
     n,m=CC.sqrtCs.shape
     NPix=CC.NPix
-    np.random.seed(2)
+    #np.random.seed(2)
     Gamma=np.dot(CC.sqrtCs,np.random.randn(m).reshape((-1,1))).reshape((NPix,NPix))+1
     Gamma-=np.min(Gamma)
     xg,yg=np.mgrid[0:NPix,0:NPix]

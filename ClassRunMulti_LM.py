@@ -52,8 +52,8 @@ def test():
 
 
     #CLM=ClassRunMultiLM(mainFOV=.3)
-    CLM=ClassRunMultiLM(mainFOV=5.)
-    #CLM=ClassRunMultiLM(mainFOV=.3)
+    CLM=ClassRunMultiLM(mainFOV=5)
+    #CLM=ClassRunMultiLM(mainFOV=.2)
     CLM.run()
 
 
@@ -62,7 +62,7 @@ class ClassRunMultiLM():
     def __init__(self,
                  mainFOV=0.1,
                  CellDeg=0.002,
-                 NCPU=56):
+                 NCPU=96):
         DoPlot=False
         self.NCPU=NCPU
         pylab.close("all")
@@ -74,7 +74,8 @@ class ClassRunMultiLM():
         self.CM=CM
 
         #241.20678,55.59485 # cluster
-        FacetFOV=0.15
+        FacetFOV=0.150
+        FacetFOV=0.2
         NPix=int(FacetFOV/CellDeg)
         if (NPix%2)==0:
             NPix+=1
@@ -85,7 +86,7 @@ class ClassRunMultiLM():
         self.CellRad=CellRad=CellDeg*np.pi/180
 
         
-        Dl=FacetFOV*np.pi/180/4
+        Dl=FacetFOV*np.pi/180/2
         mainFOV=(mainFOV//FacetFOV+1)*FacetFOV
         self.mainFOVrad=mainFOVrad=mainFOV*np.pi/180
 
@@ -102,6 +103,7 @@ class ClassRunMultiLM():
         self.rac_main,self.decc_main=self.CM.racdecc_main
         #self.rac_main,self.decc_main=241.20678*np.pi/180,55.59485*np.pi/180
         #self.rac_main,self.decc_main=244.1718*np.pi/180,55.75713889*np.pi/180
+        #self.rac_main,self.decc_main=244.25*np.pi/180,56.15*np.pi/180
         #self.rac_main,self.decc_main = rac_main_rad*180/np.pi,decc_main_rad*180/np.pi
 
         self.CoordMachine = ModCoord.ClassCoordConv(self.rac_main, self.decc_main)
@@ -204,12 +206,14 @@ class ClassRunMultiLM():
         
         self.MedianCube=Im/ImSum
         self.MedianCube[np.isnan(self.MedianCube)]=0.
-        self.SaveFITS("Test.median.fits",self.MedianCube)
+        self.SaveFITS("Test.%i.median.fits"%int(os.getpid()),self.MedianCube)
 
         self.StdCube=Im1/Im1Sum
         self.StdCube[np.isnan(self.StdCube)]=0.
         self.StdCube=np.sqrt(self.StdCube)
-        self.SaveFITS("Test.std.fits",self.StdCube)
+        self.SaveFITS("Test.%i.std.fits"%int(os.getpid()),self.StdCube)
+        self.SaveFITS("Test.%i.W.fits"%int(os.getpid()),ImSum)
+        self.SaveFITS("Test.%i.W2.fits"%int(os.getpid()),Im1Sum)
         
         
             
@@ -244,6 +248,7 @@ class ClassRunMultiLM():
             return FacetID, None,None,None
         
         g,MedianCube,SigmaCube=CLM.runLM()
+        
         return FacetID,g,MedianCube,SigmaCube
         #np.save("gEst.npy",g)
     

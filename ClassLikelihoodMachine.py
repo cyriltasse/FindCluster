@@ -4,7 +4,7 @@ import ClassCatalogMachine
 import ClassDisplayRGB
 from DDFacet.Other import ClassTimeIt
 from DDFacet.ToolsDir.ModToolBox import EstimateNpix
-np.random.seed(1)
+#np.random.seed(1)
 from DDFacet.Other import logger
 log = logger.getLogger("ClassLikelihoodMachine")
 from DDFacet.Other.AsyncProcessPool import APP, WorkerProcessError

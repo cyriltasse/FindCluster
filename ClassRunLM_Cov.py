@@ -53,7 +53,7 @@ def test(DoPlot=False):
     #FOV=0.2
     CellDeg=0.002
     NPix=int(FOV/CellDeg)
-    if (NPix%2)!=0:
+    if (NPix%2)==0:
         NPix+=1
     log.print("Choosing NPix=%i"%NPix)
 
@@ -117,7 +117,7 @@ class ClassRunLM_Cov():
         self.CellDeg=SubField["CellDeg"]
         self.CellRad=self.CellDeg*np.pi/180
         self.NPix=SubField["NPix"]
-        np.random.seed(43)
+        #np.random.seed(43)
         self.CM=CM
         
         self.DicoSourceXY=None
@@ -151,7 +151,7 @@ class ClassRunLM_Cov():
         # self.GM.initCovMatrices(ScaleFWHMkpc=ScaleKpc)
 
         self.XSimul=None
-        self.simulCat()
+        # self.simulCat()
         
         self.CLM.ComputeIndexCube(self.NPix)
         self.MoveType="Stretch"
@@ -490,9 +490,10 @@ class ClassRunLM_Cov():
             dL=L-L_L[-1]
             if Alpha<1e-7 or HasConverged:
                 log.print(ModColor.Str("STOP"))
-                #PM.Plot(g,NTry=500,Force=True)
-                PM.Plot(g,NTry=500,FullHessian=True,Force=True)
-                return g,self.PM.MedianCube,self.PM.SigmaCube
+                PM.Plot(g,NTry=500,Force=True)
+                #PM.Plot(g,NTry=500,FullHessian=True,Force=True)
+                return g,self.PM.BestCube,self.PM.SigmaCube
+                # return g,self.PM.MedianCube,self.PM.SigmaCube
             if L<L_L[-1]:
                 log.print(ModColor.Str("Things are getting worse"))
                 log.print(ModColor.Str("   decreasing Alpha: %f -> %f"%(Alpha,Alpha/factAlpha)))

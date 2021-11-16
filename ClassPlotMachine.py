@@ -42,6 +42,7 @@ def Sigmoid(x,a=1):
 mdot=np.linalg.multi_dot
 
 import ClassShapiroWilk
+import jax
 
 def FillBetween(ax,Gin,q0,q1,CubeSimul,iSlice=None,PlotMed=False):
     if iSlice is not None:
@@ -530,19 +531,24 @@ class ClassPlotMachine():
         pylab.show(block=False)
         pylab.pause(0.1)
         self.SaveFig()
-
-        
-
-
         
     def giveGammaStat(self,g,NTry=100,gArray=None,FullHessian=False):
-        
+        self.BestCube=self.GM.giveGammaCube(g,ScaleCube=self.ScaleCube)
+
+        Th=1e-8
         if gArray is not None:
             NTry=gArray.shape[0]
         elif not FullHessian:
             log.print("  using diagonal Hessian...")
             dJdg=self.CLM.d2logPdg2(g,Diag=True).flat[:]
+            ind=np.where(dJdg<dJdg.max()*Th)[0]
+            dJdg[ind]=Th
             Sig=np.sqrt(1./np.abs(dJdg))#/2.
+            # #Sig[ind]=np.sqrt(1./np.abs(Th))
+            # np.savez("Sig_%03i.npz"%self.PlotID,
+            #          Sig=Sig,
+            #          dJdg=dJdg)
+            
             gArray=np.array([g+Sig*np.random.randn(*g.shape) for iTry in range(NTry)])
         elif FullHessian:
             while True:
@@ -563,11 +569,11 @@ class ClassPlotMachine():
             log.print("  doing SVD...")
             #dJdG=np.diag(np.diag(dJdG))
             Us,ss,Vs=np.linalg.svd(dJdG)
+            #Us,ss,Vs=jax.numpy.linalg.svd(dJdG)
 
             sss=ss[ss>0]
             log.print("  log Singular value Max/Min: %5.2f"%(np.log10(sss.max()/sss.min())))
 
-            Th=1e-6
             ind=np.where(ss<ss.max()*Th)[0]
             ssqs=1./np.sqrt(ss)
             ssqs[ind]=0
@@ -596,7 +602,7 @@ class ClassPlotMachine():
         for iTry in range(NTry):
             GammaStat[iTry]=(self.GM.giveGammaCube(gArray[iTry],ScaleCube=self.ScaleCube))
         self.GammaStat=GammaStat
-
+        
 
 
         
@@ -606,14 +612,16 @@ class ClassPlotMachine():
         
         Cube_q0=np.quantile(self.GammaStat,0.16,axis=0)
         Cube_q1=np.quantile(self.GammaStat,0.84,axis=0)
-        self.SigmaCube=(Cube_q1-Cube_q0)/2.
+        #self.SigmaCube=(Cube_q1-Cube_q0)/2.
         self.MedianCube=np.quantile(self.GammaStat,0.5,axis=0)
+        self.SigmaCube=(Cube_q1-self.MedianCube)#Cube_q0)/2.
         self.GammaStat=GammaStat
         
         for iSlice in range(self.GM.NSlice):
             self.MedianCube[iSlice][self.GM.ThisMask==1]=np.nan
             self.SigmaCube[iSlice][self.GM.ThisMask==1]=np.nan
-
+            self.BestCube[iSlice][self.GM.ThisMask==1]=np.nan
+            
         return GammaStat
     
     def PlotHist(self,g,NTry=100,gArray=None,FullHessian=False):
