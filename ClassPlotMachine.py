@@ -207,7 +207,7 @@ class ClassPlotMachine():
             v1=np.max([vmax,Ss[ind].max(),Sb[ind].max()])
             LVMM.append((v0,v1))
             
-        print(vmin,vmax)
+        # print(vmin,vmax)
         
         for iiSlice,iSlice in enumerate(LSlice):
             ax0=fig.add_subplot(Nx,Ny,1+iiSlice)
