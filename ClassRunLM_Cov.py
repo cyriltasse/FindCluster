@@ -492,7 +492,7 @@ class ClassRunLM_Cov():
                 log.print(ModColor.Str("STOP"))
                 PM.Plot(g,NTry=500,Force=True)
                 #PM.Plot(g,NTry=500,FullHessian=True,Force=True)
-                return g,self.PM.BestCube,self.PM.SigmaCube
+                return g,self.PM.BestCube,self.PM.MedianCube,self.PM.SigmaCube,self.PM.Cube_q0,self.PM.Cube_q1
                 # return g,self.PM.MedianCube,self.PM.SigmaCube
             if L<L_L[-1]:
                 log.print(ModColor.Str("Things are getting worse"))
@@ -516,7 +516,7 @@ class ClassRunLM_Cov():
                 if dL!=0 and len(L_dL)>20:
                     Mean_dL=np.mean(np.array(L_dL)[-10:])
                     log.print("  Mean_dL=%f"%Mean_dL)
-                    if Mean_dL<0.3:
+                    if Mean_dL<10:
                         log.print(ModColor.Str("Likelihood does not improve anymore"))
                         HasConverged=True
                     

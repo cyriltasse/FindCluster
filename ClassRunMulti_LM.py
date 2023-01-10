@@ -52,7 +52,7 @@ def test():
 
 
     #CLM=ClassRunMultiLM(mainFOV=.3)
-    CLM=ClassRunMultiLM(mainFOV=5)
+    CLM=ClassRunMultiLM(mainFOV=0.5)
     #CLM=ClassRunMultiLM(mainFOV=.2)
     CLM.run()
 
@@ -75,7 +75,7 @@ class ClassRunMultiLM():
 
         #241.20678,55.59485 # cluster
         FacetFOV=0.150
-        FacetFOV=0.2
+        #FacetFOV=0.2
         NPix=int(FacetFOV/CellDeg)
         if (NPix%2)==0:
             NPix+=1
@@ -158,17 +158,26 @@ class ClassRunMultiLM():
         
 
         for res in results:
-            FacetID,g,MedianCube,SigmaCube=res
+            FacetID,g,BestCube,MedianCube,SigmaCube,q0,q1=res
             if g is None:
                 continue
             self.DicoFacets[FacetID]["MedianCube"]=MedianCube
+            self.DicoFacets[FacetID]["BestCube"]=BestCube
             self.DicoFacets[FacetID]["g"]=g
             self.DicoFacets[FacetID]["SigmaCube"]=SigmaCube
+            
+            self.DicoFacets[FacetID]["q0"]=q0
+            self.DicoFacets[FacetID]["q1"]=q1
 
         Im=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
+        ImB=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
         ImSum=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
+        Imq0=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
+        Imq1=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
+        
         Im1=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
         Im1Sum=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
+        
         sig=2.
         xx,yy=np.mgrid[-sig:sig:1j*self.NPixFacet,-sig:sig:1j*self.NPixFacet]
         # WFacet=np.ones((self.CM.NSlice,self.NPixFacet,self.NPixFacet),np.float32)
@@ -189,12 +198,19 @@ class ClassRunMultiLM():
             x0,x1,y0,y1=Aedge
             
             MedianCube=self.DicoFacets[FacetID]["MedianCube"]
+            BestCube=self.DicoFacets[FacetID]["BestCube"]
+            q0=self.DicoFacets[FacetID]["q0"]
+            q1=self.DicoFacets[FacetID]["q1"]
             VarCube=self.DicoFacets[FacetID]["SigmaCube"]**2
             
             #Im=np.zeros((self.CM.NSlice,self.NPixMain,self.NPixMain),np.float32)
             Im[:,x0:x1,y0:y1]+=(MedianCube*WFacet)[:,x0d:x1d,y0d:y1d]
             ImSum[:,x0:x1,y0:y1]+=WFacet[:,x0d:x1d,y0d:y1d]
 
+            Imq0[:,x0:x1,y0:y1]+=(q0*WFacet)[:,x0d:x1d,y0d:y1d]
+            Imq1[:,x0:x1,y0:y1]+=(q1*WFacet)[:,x0d:x1d,y0d:y1d]
+            
+            
             Im1[:,x0:x1,y0:y1]+=(VarCube*WFacet**2)[:,x0d:x1d,y0d:y1d]
             Im1Sum[:,x0:x1,y0:y1]+=(WFacet**2)[:,x0d:x1d,y0d:y1d]
 
@@ -207,6 +223,19 @@ class ClassRunMultiLM():
         self.MedianCube=Im/ImSum
         self.MedianCube[np.isnan(self.MedianCube)]=0.
         self.SaveFITS("Test.%i.median.fits"%int(os.getpid()),self.MedianCube)
+        
+        self.BestCube=ImB/ImSum
+        self.BestCube[np.isnan(self.BestCube)]=0.
+        self.SaveFITS("Test.%i.best.fits"%int(os.getpid()),self.BestCube)
+        
+        self.Imq0=Imq0/ImSum
+        self.Imq0[np.isnan(self.Imq0)]=0.
+        self.SaveFITS("Test.%i.q0.fits"%int(os.getpid()),self.Imq0)
+        
+        self.Imq1=Imq1/ImSum
+        self.Imq1[np.isnan(self.Imq1)]=0.
+        self.SaveFITS("Test.%i.q1.fits"%int(os.getpid()),self.Imq1)
+        
 
         self.StdCube=Im1/Im1Sum
         self.StdCube[np.isnan(self.StdCube)]=0.
@@ -245,10 +274,10 @@ class ClassRunMultiLM():
                                           DoPlot=False,
                                           PlotID=FacetID)
         if CLM.CLM.Ns==0:
-            return FacetID, None,None,None
+            return FacetID, None,None,None,None,None,None
         
-        g,MedianCube,SigmaCube=CLM.runLM()
+        g,BestCube,MedianCube,SigmaCube,q0,q1=CLM.runLM()
         
-        return FacetID,g,MedianCube,SigmaCube
+        return FacetID,g,BestCube,MedianCube,SigmaCube,q0,q1
         #np.save("gEst.npy",g)
     

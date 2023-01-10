@@ -612,6 +612,8 @@ class ClassPlotMachine():
         
         Cube_q0=np.quantile(self.GammaStat,0.16,axis=0)
         Cube_q1=np.quantile(self.GammaStat,0.84,axis=0)
+        self.Cube_q0=Cube_q0
+        self.Cube_q1=Cube_q1
         #self.SigmaCube=(Cube_q1-Cube_q0)/2.
         self.MedianCube=np.quantile(self.GammaStat,0.5,axis=0)
         self.SigmaCube=(Cube_q1-self.MedianCube)#Cube_q0)/2.
